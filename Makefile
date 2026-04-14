@@ -5,8 +5,9 @@ LDFLAGS ?=
 SRC := $(sort $(wildcard src/*.c))
 OBJ := $(SRC:.c=.o)
 BIN := trustprobe
+RUNTIME_TEST_BIN := tests/runtime_capture
 
-.PHONY: all clean
+.PHONY: all clean runtime-test
 
 all: $(BIN)
 
@@ -16,5 +17,11 @@ $(BIN): $(OBJ)
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+runtime-test: $(RUNTIME_TEST_BIN)
+	./$(RUNTIME_TEST_BIN)
+
+$(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
+	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
+
 clean:
-	rm -f src/*.o $(BIN)
+	rm -f src/*.o $(BIN) $(RUNTIME_TEST_BIN)

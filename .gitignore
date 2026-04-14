@@ -1,2 +1,4 @@
 trustprobe
 src/*.o
+tests/runtime_capture
+tmp-trustprobe-*
