@@ -14,8 +14,9 @@ enum {
 
 static void usage(const char *argv0) {
     printf(
-        "usage: %s [all|physical|firmware|kernel]\n"
+        "usage: %s [--json] [all|physical|firmware|kernel]\n"
         "\n"
+        "  --json    print machine-readable JSON instead of text output\n"
         "  all       run all trust boundary checks (default)\n"
         "  physical  run USB / desktop physical-trust checks\n"
         "  firmware  run Secure Boot / fwupd / signing checks\n"
@@ -53,6 +54,7 @@ int main(int argc, char **argv) {
     bool run_physical = true;
     bool run_firmware = true;
     bool run_kernel = true;
+    bool json_output = false;
     posture_summary_t overall = {0};
     const char *mode = "all";
     int exit_code = TRUSTPROBE_EXIT_OK;
@@ -72,6 +74,8 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             usage(argv[0]);
             return 0;
+        } else if (strcmp(argv[i], "--json") == 0) {
+            json_output = true;
         } else if (strcmp(argv[i], "all") == 0 ||
                    strcmp(argv[i], "physical") == 0 ||
                    strcmp(argv[i], "firmware") == 0 ||
@@ -132,6 +136,39 @@ int main(int argc, char **argv) {
     }
 
     exit_code = overall.fail_count > 0 ? TRUSTPROBE_EXIT_FAIL : TRUSTPROBE_EXIT_OK;
+
+    if (json_output) {
+        trustprobe_group_view_t groups[3];
+        size_t group_count = 0;
+
+        if (run_physical) {
+            groups[group_count++] = (trustprobe_group_view_t){
+                .name = "physical",
+                .results = physical_results,
+                .result_count = physical_count,
+                .summary = &physical_summary,
+            };
+        }
+        if (run_firmware) {
+            groups[group_count++] = (trustprobe_group_view_t){
+                .name = "firmware",
+                .results = firmware_results,
+                .result_count = firmware_count,
+                .summary = &firmware_summary,
+            };
+        }
+        if (run_kernel) {
+            groups[group_count++] = (trustprobe_group_view_t){
+                .name = "kernel",
+                .results = kernel_results,
+                .result_count = kernel_count,
+                .summary = &kernel_summary,
+            };
+        }
+
+        trustprobe_print_json(mode, banner_text(run_physical, run_firmware, run_kernel), groups, group_count, &overall, exit_code);
+        return exit_code;
+    }
 
     trustprobe_log("%s", banner_text(run_physical, run_firmware, run_kernel));
     putchar('\n');

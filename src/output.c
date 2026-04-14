@@ -76,6 +76,62 @@ static void print_result_label(FILE *stream, check_state_t state) {
     fprintf(stream, "  %s[%s]%s", state_color(state), label, c_reset());
 }
 
+static void print_json_string(const char *text) {
+    putchar('"');
+    for (const unsigned char *p = (const unsigned char *)text; *p != '\0'; p++) {
+        switch (*p) {
+        case '\\':
+            fputs("\\\\", stdout);
+            break;
+        case '"':
+            fputs("\\\"", stdout);
+            break;
+        case '\n':
+            fputs("\\n", stdout);
+            break;
+        case '\r':
+            fputs("\\r", stdout);
+            break;
+        case '\t':
+            fputs("\\t", stdout);
+            break;
+        default:
+            if (*p < 0x20) {
+                printf("\\u%04x", *p);
+            } else {
+                putchar(*p);
+            }
+            break;
+        }
+    }
+    putchar('"');
+}
+
+static void print_json_summary(const posture_summary_t *summary) {
+    printf("{\"state\":");
+    print_json_string(trustprobe_state_name(trustprobe_summary_state(summary)));
+    printf(
+        ",\"counts\":{\"ok\":%zu,\"warn\":%zu,\"fail\":%zu,\"skip\":%zu}}",
+        summary->ok_count,
+        summary->warn_count,
+        summary->fail_count,
+        summary->skip_count
+    );
+}
+
+static const char *exit_meaning(int exit_code) {
+    switch (exit_code) {
+    case 0:
+        return "no_fail";
+    case 1:
+        return "posture_fail";
+    case 2:
+        return "usage_or_runtime_error";
+    default:
+        return "unknown";
+    }
+}
+
 void trustprobe_print_result(const check_result_t *result) {
     FILE *stream = stdout;
     print_result_label(stream, result->state);
@@ -135,4 +191,54 @@ void trustprobe_print_summary(const char *name, const posture_summary_t *summary
         summary->fail_count,
         summary->skip_count
     );
+}
+
+void trustprobe_print_json(
+    const char *mode,
+    const char *banner,
+    const trustprobe_group_view_t *groups,
+    size_t group_count,
+    const posture_summary_t *overall,
+    int exit_code
+) {
+    printf("{\"mode\":");
+    print_json_string(mode);
+    printf(",\"banner\":");
+    print_json_string(banner);
+    printf(",\"groups\":[");
+
+    for (size_t i = 0; i < group_count; i++) {
+        if (i > 0) {
+            putchar(',');
+        }
+
+        printf("{\"name\":");
+        print_json_string(groups[i].name);
+        printf(",\"summary\":");
+        print_json_summary(groups[i].summary);
+        printf(",\"results\":[");
+
+        for (size_t j = 0; j < groups[i].result_count; j++) {
+            const check_result_t *result = &groups[i].results[j];
+            if (j > 0) {
+                putchar(',');
+            }
+
+            printf("{\"name\":");
+            print_json_string(result->name);
+            printf(",\"state\":");
+            print_json_string(trustprobe_state_name(result->state));
+            printf(",\"detail\":");
+            print_json_string(result->detail);
+            printf(",\"requires_root\":%s}", result->requires_root ? "true" : "false");
+        }
+
+        printf("]}");
+    }
+
+    printf("],\"overall\":");
+    print_json_summary(overall);
+    printf(",\"exit_code\":%d,\"exit_meaning\":", exit_code);
+    print_json_string(exit_meaning(exit_code));
+    printf("}\n");
 }
