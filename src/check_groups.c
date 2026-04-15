@@ -1,6 +1,9 @@
 #include <stddef.h>
 
 #include "checks.h"
+#include "checks_internal.h"
+
+#define REMAINING(used, max) ((used) < (max) ? (max) - (used) : 0)
 
 size_t trustprobe_check_physical(check_result_t *results, size_t max_results) {
     if (results == NULL || max_results == 0) {
@@ -8,6 +11,8 @@ size_t trustprobe_check_physical(check_result_t *results, size_t max_results) {
     }
 
     size_t used = 0;
+
+    used += trustprobe_check_usbguard(results + used, REMAINING(used, max_results));
 
     return used;
 }
