@@ -6,9 +6,10 @@ SRC := $(sort $(wildcard src/*.c))
 OBJ := $(SRC:.c=.o)
 BIN := trustprobe
 RULES_TEST_BIN := tests/rules_parser
+POLICY_TEST_BIN := tests/policy_parser
 RUNTIME_TEST_BIN := tests/runtime_capture
 
-.PHONY: all clean run help-check parser-test runtime-test
+.PHONY: all clean run help-check parser-test policy-test runtime-test
 
 all: $(BIN)
 
@@ -21,11 +22,17 @@ src/%.o: src/%.c
 parser-test: $(RULES_TEST_BIN)
 	./$(RULES_TEST_BIN)
 
+policy-test: $(POLICY_TEST_BIN)
+	./$(POLICY_TEST_BIN)
+
 runtime-test: $(RUNTIME_TEST_BIN)
 	./$(RUNTIME_TEST_BIN)
 
 $(RULES_TEST_BIN): tests/rules_parser.c src/usbguard_rules.c include/usbguard_rules.h
 	$(CC) $(CFLAGS) tests/rules_parser.c src/usbguard_rules.c -o $@
+
+$(POLICY_TEST_BIN): tests/policy_parser.c src/runtime.c include/runtime.h
+	$(CC) $(CFLAGS) tests/policy_parser.c src/runtime.c -o $@
 
 $(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
 	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
@@ -37,4 +44,4 @@ help-check: $(BIN)
 	./$(BIN) --help >/dev/null
 
 clean:
-	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(RUNTIME_TEST_BIN)
+	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(RUNTIME_TEST_BIN)
