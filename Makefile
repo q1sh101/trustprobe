@@ -7,9 +7,10 @@ OBJ := $(SRC:.c=.o)
 BIN := trustprobe
 RULES_TEST_BIN := tests/rules_parser
 POLICY_TEST_BIN := tests/policy_parser
+SILICON_TEST_BIN := tests/silicon_parsers
 RUNTIME_TEST_BIN := tests/runtime_capture
 
-.PHONY: all clean run help-check parser-test policy-test runtime-test
+.PHONY: all clean run help-check parser-test policy-test silicon-test runtime-test
 
 all: $(BIN)
 
@@ -25,6 +26,9 @@ parser-test: $(RULES_TEST_BIN)
 policy-test: $(POLICY_TEST_BIN)
 	./$(POLICY_TEST_BIN)
 
+silicon-test: $(SILICON_TEST_BIN)
+	./$(SILICON_TEST_BIN)
+
 runtime-test: $(RUNTIME_TEST_BIN)
 	./$(RUNTIME_TEST_BIN)
 
@@ -33,6 +37,9 @@ $(RULES_TEST_BIN): tests/rules_parser.c src/usbguard_rules.c include/usbguard_ru
 
 $(POLICY_TEST_BIN): tests/policy_parser.c src/runtime.c include/runtime.h
 	$(CC) $(CFLAGS) tests/policy_parser.c src/runtime.c -o $@
+
+$(SILICON_TEST_BIN): tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c include/silicon_parsers.h include/runtime.h
+	$(CC) $(CFLAGS) tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c -o $@
 
 $(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
 	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
@@ -44,4 +51,4 @@ help-check: $(BIN)
 	./$(BIN) --help >/dev/null
 
 clean:
-	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(RUNTIME_TEST_BIN)
+	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(SILICON_TEST_BIN) $(RUNTIME_TEST_BIN)
