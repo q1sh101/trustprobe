@@ -13,6 +13,7 @@ size_t trustprobe_check_physical(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     used += trustprobe_check_usbguard(results + used, REMAINING(used, max_results));
+    used += trustprobe_check_usbguard_policy(results + used, REMAINING(used, max_results));
 
     return used;
 }

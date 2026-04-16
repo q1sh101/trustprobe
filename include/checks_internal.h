@@ -6,5 +6,6 @@
 #include "types.h"
 
 size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results);
+size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_results);
 
 #endif
