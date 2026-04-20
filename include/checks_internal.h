@@ -13,5 +13,6 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results);
 size_t trustprobe_check_efi(check_result_t *results, size_t max_results);
 size_t trustprobe_check_tpm(check_result_t *results, size_t max_results);
 size_t trustprobe_check_microcode(check_result_t *results, size_t max_results);
+size_t trustprobe_check_luks(check_result_t *results, size_t max_results);
 
 #endif

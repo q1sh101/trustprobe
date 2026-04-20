@@ -31,6 +31,7 @@ size_t trustprobe_check_firmware(check_result_t *results, size_t max_results) {
     used += trustprobe_check_efi(results + used, REMAINING(used, max_results));
     used += trustprobe_check_tpm(results + used, REMAINING(used, max_results));
     used += trustprobe_check_microcode(results + used, REMAINING(used, max_results));
+    used += trustprobe_check_luks(results + used, REMAINING(used, max_results));
 
     return used;
 }
