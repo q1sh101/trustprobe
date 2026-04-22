@@ -16,5 +16,6 @@ size_t trustprobe_check_microcode(check_result_t *results, size_t max_results);
 size_t trustprobe_check_luks(check_result_t *results, size_t max_results);
 size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results);
 size_t trustprobe_check_sbctl(check_result_t *results, size_t max_results);
+size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results);
 
 #endif

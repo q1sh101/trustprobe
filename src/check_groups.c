@@ -34,6 +34,7 @@ size_t trustprobe_check_firmware(check_result_t *results, size_t max_results) {
     used += trustprobe_check_luks(results + used, REMAINING(used, max_results));
     used += trustprobe_check_fwupd(results + used, REMAINING(used, max_results));
     used += trustprobe_check_sbctl(results + used, REMAINING(used, max_results));
+    used += trustprobe_check_secureboot(results + used, REMAINING(used, max_results));
 
     return used;
 }
