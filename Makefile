@@ -12,8 +12,9 @@ FIRMWARE_OWNERSHIP_TEST_BIN := tests/firmware_ownership
 SILICON_TEST_BIN := tests/silicon_parsers
 STORAGE_TEST_BIN := tests/storage_parsers
 RUNTIME_TEST_BIN := tests/runtime_capture
+EFI_BOOT_TEST_BIN := tests/efi_boot_parsers
 
-.PHONY: all clean run help-check parser-test policy-test firmware-test firmware-ownership-test silicon-test storage-test runtime-test
+.PHONY: all clean run help-check parser-test policy-test firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test
 
 all: $(BIN)
 
@@ -44,6 +45,9 @@ storage-test: $(STORAGE_TEST_BIN)
 runtime-test: $(RUNTIME_TEST_BIN)
 	./$(RUNTIME_TEST_BIN)
 
+efi-boot-test: $(EFI_BOOT_TEST_BIN)
+	./$(EFI_BOOT_TEST_BIN)
+
 $(RULES_TEST_BIN): tests/rules_parser.c src/usbguard_rules.c include/usbguard_rules.h
 	$(CC) $(CFLAGS) tests/rules_parser.c src/usbguard_rules.c -o $@
 
@@ -65,6 +69,9 @@ $(STORAGE_TEST_BIN): tests/storage_parsers.c src/storage_parsers.c include/stora
 $(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
 	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
 
+$(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c include/efi_boot_parsers.h
+	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c -o $@
+
 run: $(BIN)
 	./$(BIN)
 
@@ -72,4 +79,4 @@ help-check: $(BIN)
 	./$(BIN) --help >/dev/null
 
 clean:
-	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN)
+	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN) $(EFI_BOOT_TEST_BIN)
