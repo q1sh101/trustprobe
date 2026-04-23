@@ -2,3 +2,10 @@ trustprobe
 src/*.o
 tests/runtime_capture
 tmp-trustprobe-*
+tests/rules_parser
+tests/policy_parser
+tests/silicon_parsers
+tests/storage_parsers
+tests/firmware_parsers
+tests/firmware_ownership
+tests/efi_boot_parsers
