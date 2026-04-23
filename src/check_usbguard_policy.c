@@ -13,6 +13,30 @@ typedef struct {
 } policy_expectation_t;
 
 size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+
+    if (used < max_results) {
+        char val[16] = {0};
+        if (!trustprobe_read_file_text(
+                "/sys/module/usbcore/parameters/authorized_default",
+                val, sizeof(val))) {
+            results[used++] = make_result("usbcore authorized default", CHECK_SKIP,
+                "parameter not readable");
+        } else {
+            char *trimmed = trustprobe_trim(val);
+            if (strcmp(trimmed, "0") == 0) {
+                results[used++] = make_result("usbcore authorized default", CHECK_OK,
+                    "USB devices denied by default until authorized");
+            } else if (strcmp(trimmed, "2") == 0) {
+                results[used++] = make_result("usbcore authorized default", CHECK_OK,
+                    "USB authorization: internal devices only");
+            } else {
+                results[used++] = make_result("usbcore authorized default", CHECK_WARN,
+                    "usbcore.authorized_default=1; devices authorized before usbguard starts");
+            }
+        }
+    }
+
     static const policy_expectation_t expectations[] = {
         {"ImplicitPolicyTarget", "block", "usbguard implicit policy"},
         {"PresentDevicePolicy", "apply-policy", "usbguard present device policy"},
@@ -27,15 +51,13 @@ size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_resu
     const char *path = "/etc/usbguard/usbguard-daemon.conf";
     FILE *probe = fopen(path, "r");
     if (probe == NULL && errno == ENOENT) {
-        if (max_results > 0) {
-            results[0] = make_result("usbguard daemon policy", CHECK_FAIL, "usbguard-daemon.conf not found");
-            return 1;
+        if (used < max_results) {
+            results[used++] = make_result("usbguard daemon policy", CHECK_FAIL, "usbguard-daemon.conf not found");
         }
-        return 0;
+        return used;
     }
 
     if (probe == NULL) {
-        size_t used = 0;
         for (size_t i = 0; i < sizeof(expectations) / sizeof(expectations[0]) && used < max_results; i++) {
             results[used++] = make_root_result(
                 expectations[i].name,
@@ -48,7 +70,6 @@ size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_resu
 
     fclose(probe);
 
-    size_t used = 0;
     for (size_t i = 0; i < sizeof(expectations) / sizeof(expectations[0]) && used < max_results; i++) {
         char value[128] = {0};
         if (!trustprobe_read_key_value(path, expectations[i].key, value, sizeof(value))) {

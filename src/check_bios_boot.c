@@ -254,11 +254,71 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     return used;
 }
 
+static size_t check_firmware_password(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+
+    if (used >= max_results) {
+        return used;
+    }
+
+    if (!trustprobe_command_exists("dmidecode")) {
+        results[used++] = make_result("Firmware password", CHECK_SKIP,
+            "dmidecode not available");
+        return used;
+    }
+
+    static const char *const dmidecode_argv[] = {"dmidecode", "-t", "24", NULL};
+    char buf[2048] = {0};
+    int exit_status = -1;
+
+    bool captured = trustprobe_capture_argv_status(dmidecode_argv, buf, sizeof(buf), &exit_status);
+    if (!captured || exit_status != 0) {
+        if (!captured ||
+            strstr(buf, "Permission denied") != NULL ||
+            strstr(buf, "must be root") != NULL ||
+            strstr(buf, "requires root") != NULL) {
+            results[used++] = make_root_result("Firmware password", CHECK_SKIP,
+                "requires root to read DMI hardware security");
+        } else {
+            results[used++] = make_result("Firmware password", CHECK_SKIP,
+                "firmware password state not readable");
+        }
+        return used;
+    }
+
+    const char *field = "Administrator Password Status:";
+    const char *pos = strstr(buf, field);
+    if (pos == NULL) {
+        results[used++] = make_result("Firmware password", CHECK_SKIP,
+            "firmware password state not readable");
+        return used;
+    }
+
+    pos += strlen(field);
+    while (*pos == ' ' || *pos == '\t') {
+        pos++;
+    }
+
+    if (strncmp(pos, "Enabled", 7) == 0) {
+        results[used++] = make_result("Firmware password", CHECK_OK,
+            "firmware administrator password is set");
+    } else if (strncmp(pos, "Disabled", 8) == 0) {
+        results[used++] = make_result("Firmware password", CHECK_WARN,
+            "no firmware administrator password set");
+    } else {
+        results[used++] = make_result("Firmware password", CHECK_SKIP,
+            "firmware password state not readable");
+    }
+
+    return used;
+}
+
 size_t trustprobe_check_bios_boot(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     used += check_efivars_boot(results + used, used < max_results ? max_results - used : 0);
     used += check_firmware_attrs_boot(results + used, used < max_results ? max_results - used : 0);
+    used += check_firmware_password(results + used, used < max_results ? max_results - used : 0);
 
     return used;
 }
