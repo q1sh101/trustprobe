@@ -17,6 +17,7 @@ size_t trustprobe_check_physical(check_result_t *results, size_t max_results) {
     used += trustprobe_check_desktop_usb(results + used, REMAINING(used, max_results));
     used += trustprobe_check_iommu(results + used, REMAINING(used, max_results));
     used += trustprobe_check_bluetooth(results + used, REMAINING(used, max_results));
+    used += trustprobe_check_serial_console(results + used, REMAINING(used, max_results));
     used += trustprobe_check_bolt(results + used, REMAINING(used, max_results));
 
     return used;
