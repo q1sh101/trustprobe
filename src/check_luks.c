@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "checks.h"
 #include "runtime.h"
@@ -57,6 +58,84 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                     CHECK_WARN,
                     "no LUKS-encrypted volumes detected"
                 );
+            }
+        }
+    }
+
+    if (used < max_results) {
+        static const char *const lsblk_fstype_argv[] = {
+            "lsblk", "-r", "-n", "-o", "NAME,FSTYPE", NULL
+        };
+        char lsblk_buf[4096] = {0};
+        int lsblk_status = -1;
+
+        if (!trustprobe_command_exists("lsblk")) {
+            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
+                "lsblk not available");
+        } else if (!trustprobe_command_exists("cryptsetup")) {
+            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
+                "cryptsetup not available");
+        } else if (!trustprobe_capture_argv_status(lsblk_fstype_argv, lsblk_buf,
+                                                    sizeof(lsblk_buf), &lsblk_status) ||
+                   lsblk_status != 0) {
+            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
+                "unable to inspect block devices");
+        } else {
+            size_t luks_found = 0;
+            size_t luks_with_token = 0;
+            char *line = lsblk_buf;
+
+            while (*line != '\0') {
+                char *eol = strchr(line, '\n');
+                size_t line_len = eol != NULL ? (size_t)(eol - line) : strlen(line);
+                char *space = memchr(line, ' ', line_len);
+
+                if (space != NULL) {
+                    size_t namelen = (size_t)(space - line);
+                    const char *fstype = space + 1;
+                    size_t fstypelen = (size_t)(line + line_len - fstype);
+
+                    while (fstypelen > 0 &&
+                           (fstype[fstypelen - 1] == ' ' || fstype[fstypelen - 1] == '\r')) {
+                        fstypelen--;
+                    }
+
+                    if (fstypelen == 11 && strncmp(fstype, "crypto_LUKS", 11) == 0 &&
+                        namelen > 0 && namelen < 64) {
+                        char device_path[80] = {0};
+                        if (snprintf(device_path, sizeof(device_path),
+                                     "/dev/%.*s", (int)namelen, line) < (int)sizeof(device_path)) {
+                            const char *dump_argv[] = {
+                                "cryptsetup", "luksDump", device_path, NULL
+                            };
+                            char dump_buf[8192] = {0};
+                            int dump_status = -1;
+                            luks_found++;
+                            if (trustprobe_capture_argv_status(
+                                    (const char *const *)dump_argv,
+                                    dump_buf, sizeof(dump_buf), &dump_status) &&
+                                dump_status == 0 &&
+                                strstr(dump_buf, "tpm2") != NULL) {
+                                luks_with_token++;
+                            }
+                        }
+                    }
+                }
+
+                line = eol != NULL ? eol + 1 : line + line_len;
+            }
+
+            if (luks_found == 0) {
+                results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
+                    "no LUKS devices found");
+            } else if (luks_with_token == luks_found) {
+                char detail[TRUSTPROBE_DETAIL_MAX];
+                snprintf(detail, sizeof(detail),
+                    "LUKS has TPM2 token on %zu device(s)", luks_found);
+                results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
+            } else {
+                results[used++] = make_result("LUKS TPM binding", CHECK_WARN,
+                    "LUKS device without TPM2 token");
             }
         }
     }

@@ -261,3 +261,26 @@ trustprobe_efi_sigdb_status_t trustprobe_classify_efi_sigdb(
 
     return TRUSTPROBE_EFI_SIGDB_NONEMPTY;
 }
+
+size_t trustprobe_count_efi_sigdb_lists(const unsigned char *data, size_t len) {
+    if (data == NULL || len <= EFI_VAR_ATTR_SIZE) {
+        return 0;
+    }
+
+    const unsigned char *p = data + EFI_VAR_ATTR_SIZE;
+    size_t remaining = len - EFI_VAR_ATTR_SIZE;
+    size_t count = 0;
+
+    /* Each EFI_SIGNATURE_LIST is at least 28 bytes; advance by SignatureListSize. */
+    while (remaining >= 28) {
+        uint32_t list_size = read_le32(p + 16);
+        if (list_size < 28 || list_size > remaining) {
+            break;
+        }
+        count++;
+        p += list_size;
+        remaining -= list_size;
+    }
+
+    return count;
+}

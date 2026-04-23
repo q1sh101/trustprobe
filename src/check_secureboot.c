@@ -126,7 +126,6 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         }
     }
 
-    /* Secure Boot signature databases - raw efivars visibility */
     bool efi_visible = trustprobe_file_exists("/sys/firmware/efi");
 
     check_sigdb_variable(EFI_DB_PATH, "secure boot allowlist",
@@ -134,6 +133,82 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
 
     check_sigdb_variable(EFI_DBX_PATH, "secure boot revocations",
                          efi_visible, results, &used, max_results);
+
+    if (used < max_results) {
+        if (!efi_visible) {
+            results[used++] = make_result("Secure Boot dbx size", CHECK_SKIP,
+                "EFI runtime interface not visible");
+        } else {
+            unsigned char dbx_buf[8192];
+            size_t dbx_len = 0;
+            if (!trustprobe_read_file_binary(EFI_DBX_PATH, dbx_buf, sizeof(dbx_buf), &dbx_len) ||
+                dbx_len <= 4u) {
+                results[used++] = make_result("Secure Boot dbx size", CHECK_SKIP,
+                    "dbx not readable");
+            } else {
+                size_t payload = dbx_len - 4u;
+                char detail[TRUSTPROBE_DETAIL_MAX];
+                if (payload < 100) {
+                    snprintf(detail, sizeof(detail),
+                        "dbx minimal (%zu bytes); may be factory default", payload);
+                    results[used++] = make_result("Secure Boot dbx size", CHECK_WARN, detail);
+                } else {
+                    snprintf(detail, sizeof(detail),
+                        "dbx non-minimal (%zu bytes); currency unverified", payload);
+                    results[used++] = make_result("Secure Boot dbx size", CHECK_OK, detail);
+                }
+            }
+        }
+    }
+
+    if (used < max_results) {
+        if (!efi_visible) {
+            results[used++] = make_result("Secure Boot db keys", CHECK_SKIP,
+                "EFI runtime interface not visible");
+        } else {
+            unsigned char db_buf[8192];
+            size_t db_len = 0;
+            if (!trustprobe_read_file_binary(EFI_DB_PATH, db_buf, sizeof(db_buf), &db_len)) {
+                results[used++] = make_result("Secure Boot db keys", CHECK_SKIP,
+                    "db not readable");
+            } else {
+                size_t lists = trustprobe_count_efi_sigdb_lists(db_buf, db_len);
+                if (lists == 0) {
+                    results[used++] = make_result("Secure Boot db keys", CHECK_WARN,
+                        "db empty; Secure Boot allowlist missing");
+                } else {
+                    char detail[TRUSTPROBE_DETAIL_MAX];
+                    snprintf(detail, sizeof(detail),
+                        "%zu key list(s) in Secure Boot allowlist", lists);
+                    results[used++] = make_result("Secure Boot db keys", CHECK_OK, detail);
+                }
+            }
+        }
+    }
+
+    if (used < max_results) {
+        char mounts_buf[4096] = {0};
+        if (!trustprobe_read_file_text("/proc/mounts", mounts_buf, sizeof(mounts_buf))) {
+            results[used++] = make_result("efivarfs mount mode", CHECK_SKIP,
+                "unable to read /proc/mounts");
+        } else {
+            const char *marker = strstr(mounts_buf, " efivarfs ");
+            if (marker == NULL) {
+                results[used++] = make_result("efivarfs mount mode", CHECK_SKIP,
+                    "efivarfs not mounted");
+            } else {
+                const char *opts = marker + 10; /* skip " efivarfs " */
+                if (strncmp(opts, "ro,", 3) == 0 || strncmp(opts, "ro\n", 3) == 0 ||
+                    strncmp(opts, "ro ", 3) == 0 || strncmp(opts, "ro\0", 3) == 0) {
+                    results[used++] = make_result("efivarfs mount mode", CHECK_OK,
+                        "efivarfs mounted read-only");
+                } else {
+                    results[used++] = make_result("efivarfs mount mode", CHECK_WARN,
+                        "efivarfs mounted read-write; Secure Boot variables writable");
+                }
+            }
+        }
+    }
 
     return used;
 }

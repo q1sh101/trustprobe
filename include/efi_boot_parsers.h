@@ -47,4 +47,6 @@ typedef enum {
 trustprobe_efi_sigdb_status_t trustprobe_classify_efi_sigdb(
     const unsigned char *data, size_t len);
 
+size_t trustprobe_count_efi_sigdb_lists(const unsigned char *data, size_t len);
+
 #endif
