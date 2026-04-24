@@ -59,6 +59,45 @@ void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t
     cmdline->strict_off = token_present(text, "iommu.strict=0");
 }
 
+int trustprobe_pcr_zero_check(const char *buf, unsigned int pcr_num) {
+    if (buf == NULL) return -1;
+
+    char prefix[8];
+    snprintf(prefix, sizeof(prefix), "%u", pcr_num);
+    size_t plen = strlen(prefix);
+
+    const char *line = buf;
+    while (*line != '\0') {
+        const char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+
+        if (strncmp(p, prefix, plen) == 0 &&
+            (p[plen] == ' ' || p[plen] == ':' || p[plen] == '\t')) {
+            const char *eol = p;
+            while (*eol && *eol != '\n') eol++;
+            const char *ox = p;
+            while (ox + 1 < eol) {
+                if (ox[0] == '0' && ox[1] == 'x') {
+                    const char *hex = ox + 2;
+                    bool zeros = true;
+                    size_t n = 0;
+                    while (hex[n] && hex[n] != '\n' && hex[n] != '\r' && hex[n] != ' ') {
+                        if (hex[n] != '0') zeros = false;
+                        n++;
+                    }
+                    return n == 0 ? -1 : (zeros ? 1 : 0);
+                }
+                ox++;
+            }
+            return -1;
+        }
+
+        while (*line && *line != '\n') line++;
+        if (*line == '\n') line++;
+    }
+    return -1;
+}
+
 trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void) {
     char buf[4096] = {0};
     if (!trustprobe_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {

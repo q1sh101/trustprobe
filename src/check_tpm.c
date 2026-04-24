@@ -5,6 +5,7 @@
 
 #include "checks.h"
 #include "runtime.h"
+#include "silicon_parsers.h"
 
 size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -34,72 +35,74 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
     }
 
     if (used < max_results) {
-        static const char *const pcr_argv[] = {"tpm2_pcrread", "sha256:7", NULL};
+        static const char *const pcr7_argv[] = {"tpm2_pcrread", "sha256:7", NULL};
         char buf[512] = {0};
         int exit_status = -1;
 
         if (!trustprobe_command_exists("tpm2_pcrread")) {
-            results[used++] = make_result("TPM PCR 7", CHECK_SKIP,
-                "tpm2_pcrread not available");
-        } else if (!trustprobe_capture_argv_status(pcr_argv, buf, sizeof(buf), &exit_status) ||
+            results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "tpm2_pcrread not available");
+        } else if (!trustprobe_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
-            results[used++] = make_result("TPM PCR 7", CHECK_SKIP,
-                "PCR read failed");
+            results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "PCR read failed");
         } else {
-            /* Accept both "7: 0x..." and "7 : 0x..." PCR output forms. */
-            const char *line = buf;
-            const char *hex_start = NULL;
+            int z = trustprobe_pcr_zero_check(buf, 7);
+            if (z < 0) {
+                results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "PCR 7 not found in output");
+            } else if (z == 1) {
+                results[used++] = make_result("TPM PCR 7", CHECK_WARN,
+                    "PCR 7 empty; Secure Boot state not measured into TPM");
+            } else {
+                results[used++] = make_result("TPM PCR 7", CHECK_OK,
+                    "PCR 7 non-zero; Secure Boot state measured");
+            }
+        }
+    }
 
-            while (*line != '\0' && hex_start == NULL) {
-                const char *p = line;
-                while (*p == ' ' || *p == '\t') {
-                    p++;
-                }
-                if (p[0] == '7' && (p[1] == ' ' || p[1] == ':' || p[1] == '\t')) {
-                    const char *eol = p;
-                    while (*eol != '\0' && *eol != '\n') {
-                        eol++;
-                    }
-                    const char *ox = p;
-                    while (ox + 1 < eol) {
-                        if (ox[0] == '0' && ox[1] == 'x') {
-                            hex_start = ox + 2;
-                            break;
-                        }
-                        ox++;
-                    }
-                }
-                while (*line != '\0' && *line != '\n') {
-                    line++;
-                }
-                if (*line == '\n') {
-                    line++;
+    if (used < max_results) {
+        static const char *const pcr0_argv[] = {"tpm2_pcrread", "sha256:0", NULL};
+        char buf[512] = {0};
+        int exit_status = -1;
+
+        if (!trustprobe_command_exists("tpm2_pcrread")) {
+            results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "tpm2_pcrread not available");
+        } else if (!trustprobe_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
+                   exit_status != 0) {
+            results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "PCR read failed");
+        } else {
+            int z = trustprobe_pcr_zero_check(buf, 0);
+            if (z < 0) {
+                results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "PCR 0 not found in output");
+            } else if (z == 1) {
+                results[used++] = make_result("TPM PCR 0", CHECK_WARN,
+                    "PCR 0 zero; firmware not measured at boot");
+            } else {
+                results[used++] = make_result("TPM PCR 0", CHECK_OK,
+                    "PCR 0 non-zero; firmware measured at boot");
+            }
+        }
+    }
+
+    if (used < max_results) {
+        const char *evlog = "/sys/kernel/security/tpm0/ascii_bios_measurements";
+        FILE *f = fopen(evlog, "r");
+
+        if (f == NULL) {
+            results[used++] = make_result("TPM event log", CHECK_SKIP, "event log not available");
+        } else {
+            char line[512];
+            bool found = false;
+            while (fgets(line, sizeof(line), f) != NULL) {
+                if (strstr(line, "EV_S_CRTM_VERSION") != NULL) {
+                    found = true;
+                    break;
                 }
             }
-
-            if (hex_start == NULL) {
-                results[used++] = make_result("TPM PCR 7", CHECK_SKIP,
-                    "PCR 7 not found in output");
+            fclose(f);
+            if (found) {
+                results[used++] = make_result("TPM event log", CHECK_OK, "CRTM version event present");
             } else {
-                bool all_zeros = true;
-                size_t count = 0;
-                while (hex_start[count] != '\0' && hex_start[count] != '\n' &&
-                       hex_start[count] != '\r' && hex_start[count] != ' ') {
-                    if (hex_start[count] != '0') {
-                        all_zeros = false;
-                    }
-                    count++;
-                }
-                if (count == 0) {
-                    results[used++] = make_result("TPM PCR 7", CHECK_SKIP,
-                        "PCR 7 value unreadable");
-                } else if (all_zeros) {
-                    results[used++] = make_result("TPM PCR 7", CHECK_WARN,
-                        "PCR 7 empty; Secure Boot state not measured into TPM");
-                } else {
-                    results[used++] = make_result("TPM PCR 7", CHECK_OK,
-                        "PCR 7 non-zero; Secure Boot state measured");
-                }
+                results[used++] = make_result("TPM event log", CHECK_WARN,
+                    "EV_S_CRTM_VERSION absent from event log");
             }
         }
     }

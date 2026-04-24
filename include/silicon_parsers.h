@@ -22,5 +22,7 @@ typedef enum {
 void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t *cmdline);
 bool trustprobe_extract_microcode_revision(const char *text, char *buffer, size_t size);
 trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void);
+/* returns: 1 = all zeros, 0 = non-zero, -1 = not found */
+int trustprobe_pcr_zero_check(const char *buf, unsigned int pcr_num);
 
 #endif

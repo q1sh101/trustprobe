@@ -53,6 +53,25 @@ int main(void) {
     /* skip writes when output storage is absent */
     trustprobe_parse_iommu_cmdline("quiet splash", NULL);
 
+    assert_eq_int("pcr_zero_all_zeros",
+        trustprobe_pcr_zero_check(
+            "sha256:\n  0 : 0x0000000000000000000000000000000000000000000000000000000000000000\n",
+            0), 1);
+    assert_eq_int("pcr_zero_nonzero",
+        trustprobe_pcr_zero_check(
+            "sha256:\n  0 : 0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890\n",
+            0), 0);
+    assert_eq_int("pcr7_all_zeros",
+        trustprobe_pcr_zero_check(
+            "sha256:\n  7 : 0x0000000000000000000000000000000000000000000000000000000000000000\n",
+            7), 1);
+    assert_eq_int("pcr_not_found",
+        trustprobe_pcr_zero_check("sha256:\n  7 : 0x1234...\n", 0), -1);
+    assert_eq_int("pcr_null",
+        trustprobe_pcr_zero_check(NULL, 0), -1);
+    assert_eq_int("pcr_compact_colon",
+        trustprobe_pcr_zero_check("0: 0x0000000000000000000000000000000000000000000000000000000000000000\n", 0), 1);
+
     printf("silicon parsers ok\n");
     return 0;
 }
