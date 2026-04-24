@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 
 #include "checks.h"
+#include "firmware_parsers.h"
 #include "runtime.h"
 
 static size_t check_bootloader_version(check_result_t *results, size_t max_results) {
@@ -229,6 +230,35 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     return used;
 }
 
+static size_t check_sbat_revocations(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+    if (used >= max_results) return used;
+
+    static const char *const sbat_argv[] = {"mokutil", "--list-sbat-revocations", NULL};
+    char buf[2048] = {0};
+    int exit_status = -1;
+
+    if (!trustprobe_command_exists("mokutil")) {
+        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil not installed");
+        return used;
+    }
+
+    if (!trustprobe_capture_argv_status(sbat_argv, buf, sizeof(buf), &exit_status) ||
+        exit_status != 0) {
+        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil --sbat failed");
+        return used;
+    }
+
+    if (!trustprobe_sbat_entries_present(trustprobe_trim(buf))) {
+        results[used++] = make_result("SBAT revocations", CHECK_WARN,
+            "no SBAT revocation entries applied");
+    } else {
+        results[used++] = make_result("SBAT revocations", CHECK_OK,
+            "SBAT revocation entries present");
+    }
+    return used;
+}
+
 size_t trustprobe_check_boot_chain(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
@@ -246,6 +276,9 @@ size_t trustprobe_check_boot_chain(check_result_t *results, size_t max_results) 
 
     remaining = used < max_results ? max_results - used : 0;
     used += check_initramfs_permissions(results + used, remaining);
+
+    remaining = used < max_results ? max_results - used : 0;
+    used += check_sbat_revocations(results + used, remaining);
 
     return used;
 }

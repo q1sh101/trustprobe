@@ -180,6 +180,50 @@ int main(void) {
         assert_true("hsi_late_attr_value", strcmp(hsi_val, "not-supported") == 0);
     }
 
+    {
+        /* SbatLevel efivar: 4-byte attr header + "sbat,1,2021030218\nshim,2\n" */
+        unsigned char sbat_buf[32] = {0x07, 0x00, 0x00, 0x00,
+            's','b','a','t',',','1',',','2','0','2','1','0','3','0','2','1','8','\n',
+            's','h','i','m',',','2','\n'};
+        char sbat_line[64] = {0};
+        assert_true("sbat_parse_ok",
+            trustprobe_parse_sbat_level(sbat_buf, 28, sbat_line, sizeof(sbat_line)));
+        assert_true("sbat_parse_value", strcmp(sbat_line, "sbat,1,2021030218") == 0);
+
+        assert_false("sbat_parse_too_short",
+            trustprobe_parse_sbat_level(sbat_buf, 4, sbat_line, sizeof(sbat_line)));
+        assert_false("sbat_parse_null",
+            trustprobe_parse_sbat_level(NULL, 28, sbat_line, sizeof(sbat_line)));
+        assert_false("sbat_parse_null_out",
+            trustprobe_parse_sbat_level(sbat_buf, 28, NULL, sizeof(sbat_line)));
+
+        /* exactly 5 bytes: 4-byte header + one content byte (no newline) */
+        unsigned char sbat_min[5] = {0x07, 0x00, 0x00, 0x00, 'x'};
+        assert_true("sbat_parse_no_newline",
+            trustprobe_parse_sbat_level(sbat_min, 5, sbat_line, sizeof(sbat_line)));
+        assert_true("sbat_parse_no_newline_value", strcmp(sbat_line, "x") == 0);
+    }
+
+    assert_true("sbat_entries_present",
+        trustprobe_sbat_entries_present("sbat,1,2021030218\nshim,2\n"));
+    assert_false("sbat_entries_empty",
+        trustprobe_sbat_entries_present(""));
+    assert_false("sbat_entries_whitespace",
+        trustprobe_sbat_entries_present("  \n  "));
+    assert_false("sbat_entries_no_sbat",
+        trustprobe_sbat_entries_present("No SBAT data found.\n"));
+    assert_false("sbat_entries_null",
+        trustprobe_sbat_entries_present(NULL));
+
+    assert_true("sb_has_ms_ca_2011",
+        trustprobe_sb_has_ms_ca("CN=Microsoft Corporation UEFI CA 2011\n"));
+    assert_true("sb_has_ms_ca_2023",
+        trustprobe_sb_has_ms_ca("CN=Microsoft UEFI CA 2023\n"));
+    assert_false("sb_no_ms_ca",
+        trustprobe_sb_has_ms_ca("CN=My Custom CA\n"));
+    assert_false("sb_ms_ca_null",
+        trustprobe_sb_has_ms_ca(NULL));
+
     printf("firmware parsers ok\n");
     return 0;
 }

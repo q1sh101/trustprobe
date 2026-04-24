@@ -283,3 +283,36 @@ bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *
 
     return status->installed_known || status->setup_mode_known || status->secure_boot_known || status->owner_guid_present;
 }
+
+bool trustprobe_parse_sbat_level(const unsigned char *buf, size_t len,
+                                 char *out, size_t out_size) {
+    if (buf == NULL || out == NULL || out_size == 0 || len <= 4u) return false;
+    const char *payload = (const char *)(buf + 4);
+    size_t plen = len - 4u;
+    size_t line_end = 0;
+    while (line_end < plen && payload[line_end] != '\n' &&
+           payload[line_end] != '\r' && payload[line_end] != '\0') {
+        line_end++;
+    }
+    if (line_end == 0) return false;
+    size_t copy = line_end < out_size - 1u ? line_end : out_size - 1u;
+    memcpy(out, payload, copy);
+    out[copy] = '\0';
+    return true;
+}
+
+bool trustprobe_sbat_entries_present(const char *text) {
+    if (text == NULL) return false;
+    const char *t = text;
+    while (*t == ' ' || *t == '\t' || *t == '\r' || *t == '\n') t++;
+    if (*t == '\0') return false;
+    if (strstr(text, "No SBAT") != NULL) return false;
+    return true;
+}
+
+bool trustprobe_sb_has_ms_ca(const char *text) {
+    if (text == NULL) return false;
+    /* covers CN=Microsoft Corporation UEFI CA 2011 and CN=Microsoft UEFI CA 2023 */
+    return strstr(text, "Microsoft Corporation UEFI CA") != NULL ||
+           strstr(text, "Microsoft UEFI CA") != NULL;
+}

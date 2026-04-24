@@ -10,8 +10,9 @@
 #include "runtime.h"
 
 #define EFI_SIGDB_GUID "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
-#define EFI_DB_PATH  "/sys/firmware/efi/efivars/db-" EFI_SIGDB_GUID
-#define EFI_DBX_PATH "/sys/firmware/efi/efivars/dbx-" EFI_SIGDB_GUID
+#define EFI_DB_PATH    "/sys/firmware/efi/efivars/db-"  EFI_SIGDB_GUID
+#define EFI_DBX_PATH   "/sys/firmware/efi/efivars/dbx-" EFI_SIGDB_GUID
+#define EFI_SBAT_PATH  "/sys/firmware/efi/efivars/SbatLevel-605dab50-e046-4300-abb6-3dd810dd8b23"
 
 static void check_sigdb_variable(const char *path, const char *name,
                                  bool efi_visible,
@@ -182,6 +183,56 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
                         "%zu key list(s) in Secure Boot allowlist", lists);
                     results[used++] = make_result("Secure Boot db keys", CHECK_OK, detail);
                 }
+            }
+        }
+    }
+
+    if (used < max_results) {
+        if (!efi_visible) {
+            results[used++] = make_result("SBAT policy level", CHECK_SKIP,
+                "EFI runtime interface not visible");
+        } else if (!trustprobe_file_exists(EFI_SBAT_PATH)) {
+            results[used++] = make_result("SBAT policy level", CHECK_SKIP,
+                "SbatLevel variable absent; pre-SBAT firmware");
+        } else {
+            unsigned char sbat_buf[256];
+            size_t sbat_len = 0;
+            if (!trustprobe_read_file_binary(EFI_SBAT_PATH, sbat_buf, sizeof(sbat_buf), &sbat_len) ||
+                sbat_len <= 4u) {
+                results[used++] = make_result("SBAT policy level", CHECK_WARN,
+                    "SbatLevel variable unreadable");
+            } else {
+                char sbat_line[64] = {0};
+                if (!trustprobe_parse_sbat_level(sbat_buf, sbat_len, sbat_line, sizeof(sbat_line))) {
+                    results[used++] = make_result("SBAT policy level", CHECK_WARN,
+                        "SbatLevel variable unreadable");
+                } else {
+                    char detail[TRUSTPROBE_DETAIL_MAX];
+                    snprintf(detail, sizeof(detail), "SbatLevel: %s", sbat_line);
+                    results[used++] = make_result("SBAT policy level", CHECK_OK, detail);
+                }
+            }
+        }
+    }
+
+    if (used < max_results) {
+        if (!has_mokutil) {
+            results[used++] = make_result("Secure Boot trust breadth", CHECK_SKIP,
+                "mokutil not installed");
+        } else {
+            static const char *const db_argv[] = {"mokutil", "--db", NULL};
+            char db_buf[32768] = {0};
+            int db_exit = -1;
+            if (!trustprobe_capture_argv_status(db_argv, db_buf, sizeof(db_buf), &db_exit) ||
+                db_exit != 0) {
+                results[used++] = make_result("Secure Boot trust breadth", CHECK_SKIP,
+                    "unable to read Secure Boot db");
+            } else if (trustprobe_sb_has_ms_ca(db_buf)) {
+                results[used++] = make_result("Secure Boot trust breadth", CHECK_WARN,
+                    "Microsoft 3rd Party UEFI CA in db; widens trusted signer set");
+            } else {
+                results[used++] = make_result("Secure Boot trust breadth", CHECK_OK,
+                    "Microsoft 3rd Party UEFI CA not found in db");
             }
         }
     }

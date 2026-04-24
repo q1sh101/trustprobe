@@ -38,4 +38,12 @@ bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *
 bool trustprobe_hsi_find_result(const char *json, const char *appstream_id,
                                 char *result_buf, size_t result_size);
 
+/* efivar buf has a 4-byte UEFI attribute header; extracts first line of payload */
+bool trustprobe_parse_sbat_level(const unsigned char *buf, size_t len,
+                                 char *out, size_t out_size);
+/* returns true if mokutil --sbat output contains applied SBAT entries */
+bool trustprobe_sbat_entries_present(const char *text);
+/* returns true if mokutil --db output contains Microsoft 3rd Party UEFI CA */
+bool trustprobe_sb_has_ms_ca(const char *text);
+
 #endif
