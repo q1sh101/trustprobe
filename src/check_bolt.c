@@ -10,39 +10,17 @@
 
 static const char *const BOLT_SYSFS_BASE = "/sys/bus/thunderbolt/devices";
 
-static bool read_thunderbolt_security_level(char *buffer, size_t size,
-                                            bool *controller_visible) {
-    if (controller_visible != NULL) {
-        *controller_visible = false;
-    }
-
+static bool read_tb_domain_attr(const char *attr, char *buffer, size_t size) {
     DIR *dir = opendir(BOLT_SYSFS_BASE);
-    if (dir == NULL) {
-        return false;
-    }
+    if (dir == NULL) return false;
 
-    bool saw_domain = false;
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (strncmp(entry->d_name, "domain", 6) != 0) {
-            continue;
-        }
-
-        saw_domain = true;
+        if (strncmp(entry->d_name, "domain", 6) != 0) continue;
 
         char path[PATH_MAX];
-        if (snprintf(path, sizeof(path), "%s/%s/security",
-                     BOLT_SYSFS_BASE, entry->d_name) >= (int)sizeof(path)) {
-            continue;
-        }
-
-        if (!trustprobe_file_exists(path)) {
-            continue;
-        }
-
-        if (controller_visible != NULL) {
-            *controller_visible = true;
-        }
+        if (snprintf(path, sizeof(path), "%s/%s/%s",
+                     BOLT_SYSFS_BASE, entry->d_name, attr) >= (int)sizeof(path)) continue;
 
         if (trustprobe_read_file_text(path, buffer, size)) {
             closedir(dir);
@@ -51,11 +29,39 @@ static bool read_thunderbolt_security_level(char *buffer, size_t size,
     }
 
     closedir(dir);
+    return false;
+}
 
-    if (controller_visible != NULL) {
-        *controller_visible = saw_domain;
+static bool read_thunderbolt_security_level(char *buffer, size_t size,
+                                            bool *controller_visible) {
+    if (controller_visible != NULL) *controller_visible = false;
+
+    DIR *dir = opendir(BOLT_SYSFS_BASE);
+    if (dir == NULL) return false;
+
+    bool saw_domain = false;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "domain", 6) != 0) continue;
+
+        saw_domain = true;
+
+        char path[PATH_MAX];
+        if (snprintf(path, sizeof(path), "%s/%s/security",
+                     BOLT_SYSFS_BASE, entry->d_name) >= (int)sizeof(path)) continue;
+
+        if (!trustprobe_file_exists(path)) continue;
+
+        if (controller_visible != NULL) *controller_visible = true;
+
+        if (trustprobe_read_file_text(path, buffer, size)) {
+            closedir(dir);
+            return true;
+        }
     }
 
+    closedir(dir);
+    if (controller_visible != NULL) *controller_visible = saw_domain;
     return false;
 }
 
@@ -138,6 +144,23 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             } else {
                 results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
                     "device list available");
+            }
+        }
+    }
+
+    if (used < max_results) {
+        char val[8] = {0};
+        if (!read_tb_domain_attr("iommu_dma_protection", val, sizeof(val))) {
+            results[used++] = make_result("Thunderbolt DMA protection", CHECK_SKIP,
+                "iommu_dma_protection not available");
+        } else {
+            char *v = trustprobe_trim(val);
+            if (strcmp(v, "1") == 0) {
+                results[used++] = make_result("Thunderbolt DMA protection", CHECK_OK,
+                    "pre-boot DMA protection active");
+            } else {
+                results[used++] = make_result("Thunderbolt DMA protection", CHECK_WARN,
+                    "pre-boot DMA protection not active");
             }
         }
     }
