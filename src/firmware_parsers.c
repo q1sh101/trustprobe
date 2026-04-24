@@ -145,6 +145,77 @@ trustprobe_fwupd_updates_status_t trustprobe_parse_fwupd_updates(const char *tex
     return TRUSTPROBE_FWUPD_UPDATES_UNKNOWN;
 }
 
+bool trustprobe_hsi_find_result(const char *json, const char *appstream_id,
+                                char *result_buf, size_t result_size) {
+    if (json == NULL || appstream_id == NULL || result_buf == NULL || result_size == 0) {
+        return false;
+    }
+
+    const char *cursor = json;
+    while (*cursor != '\0') {
+        const char *id_key = strstr(cursor, "\"AppstreamId\"");
+        if (id_key == NULL) {
+            break;
+        }
+
+        const char *colon = strchr(id_key + 13, ':');
+        if (colon == NULL) {
+            break;
+        }
+        const char *q1 = strchr(colon + 1, '"');
+        if (q1 == NULL) {
+            break;
+        }
+        q1++;
+        const char *q2 = strchr(q1, '"');
+        if (q2 == NULL) {
+            break;
+        }
+
+        size_t id_len     = (size_t)(q2 - q1);
+        size_t target_len = strlen(appstream_id);
+
+        if (id_len == target_len && memcmp(q1, appstream_id, id_len) == 0) {
+            const char *hsi_key = strstr(q2 + 1, "\"HsiResult\"");
+            const char *next_id = strstr(q2 + 1, "\"AppstreamId\"");
+
+            if (hsi_key == NULL) {
+                break;
+            }
+            /* stay within the matched object */
+            if (next_id != NULL && next_id < hsi_key) {
+                break;
+            }
+
+            const char *hsi_colon = strchr(hsi_key + 11, ':');
+            if (hsi_colon == NULL) {
+                break;
+            }
+            const char *v1 = strchr(hsi_colon + 1, '"');
+            if (v1 == NULL) {
+                break;
+            }
+            v1++;
+            const char *v2 = strchr(v1, '"');
+            if (v2 == NULL) {
+                break;
+            }
+
+            size_t vlen = (size_t)(v2 - v1);
+            if (vlen >= result_size) {
+                vlen = result_size - 1;
+            }
+            memcpy(result_buf, v1, vlen);
+            result_buf[vlen] = '\0';
+            return true;
+        }
+
+        cursor = q2 + 1;
+    }
+
+    return false;
+}
+
 bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *status) {
     if (text == NULL || status == NULL) {
         return false;

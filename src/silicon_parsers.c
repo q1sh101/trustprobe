@@ -59,6 +59,32 @@ void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t
     cmdline->strict_off = token_present(text, "iommu.strict=0");
 }
 
+trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void) {
+    char buf[4096] = {0};
+    if (!trustprobe_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {
+        return TRUSTPROBE_CPU_VENDOR_UNKNOWN;
+    }
+
+    const char *cursor = buf;
+    while (*cursor != '\0') {
+        size_t line_len = strcspn(cursor, "\r\n");
+        if (line_len > 10 && strncmp(cursor, "vendor_id", 9) == 0) {
+            const char *colon = memchr(cursor, ':', line_len);
+            if (colon != NULL) {
+                colon++;
+                while (*colon == ' ' || *colon == '\t') colon++;
+                if (strncmp(colon, "AuthenticAMD", 12) == 0) return TRUSTPROBE_CPU_VENDOR_AMD;
+                if (strncmp(colon, "GenuineIntel", 12) == 0) return TRUSTPROBE_CPU_VENDOR_INTEL;
+            }
+            break;
+        }
+        cursor += line_len;
+        while (*cursor == '\r' || *cursor == '\n') cursor++;
+    }
+
+    return TRUSTPROBE_CPU_VENDOR_UNKNOWN;
+}
+
 bool trustprobe_extract_microcode_revision(const char *text, char *buffer, size_t size) {
     if (text == NULL || buffer == NULL || size == 0) {
         return false;

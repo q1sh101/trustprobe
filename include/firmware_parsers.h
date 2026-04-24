@@ -35,5 +35,7 @@ trustprobe_secure_boot_status_t trustprobe_parse_secure_boot_state(const char *t
 bool trustprobe_secure_boot_setup_mode(const char *text);
 trustprobe_fwupd_updates_status_t trustprobe_parse_fwupd_updates(const char *text, int exit_status);
 bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *status);
+bool trustprobe_hsi_find_result(const char *json, const char *appstream_id,
+                                char *result_buf, size_t result_size);
 
 #endif
