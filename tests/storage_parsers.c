@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -56,6 +57,41 @@ int main(void) {
         assert_eq_sz("long_line_luks_count", posture.luks_count, 1);
         assert_eq_sz("long_line_crypt_count", posture.crypt_count, 0);
     }
+
+    uint32_t mask = 0;
+
+    assert_true("pcr_pcr7_only",
+        trustprobe_parse_luks_pcr_mask(
+            "Tokens:\n  0: systemd-tpm2\n     Keyslot: 0\n     pcrs: 7\n",
+            &mask));
+    assert_eq_int("pcr_pcr7_only_value", (int)mask, (int)(1u << 7));
+
+    assert_true("pcr_multi",
+        trustprobe_parse_luks_pcr_mask(
+            "Tokens:\n  0: systemd-tpm2\n     Keyslot: 0\n     pcrs: 0 4 7 9\n",
+            &mask));
+    assert_eq_int("pcr_multi_value", (int)mask,
+        (int)((1u << 0) | (1u << 4) | (1u << 7) | (1u << 9)));
+
+    assert_true("pcr_json_array",
+        trustprobe_parse_luks_pcr_mask(
+            "  0: systemd-tpm2\n     \"tpm2-pcrs\": [7, 9]\n",
+            &mask));
+    assert_eq_int("pcr_json_array_value", (int)mask,
+        (int)((1u << 7) | (1u << 9)));
+
+    assert_false("pcr_no_tpm2_token",
+        trustprobe_parse_luks_pcr_mask(
+            "Tokens:\n  0: clevis\n     Keyslot: 0\n     pcrs: 7\n",
+            &mask));
+
+    assert_false("pcr_no_pcrs_key",
+        trustprobe_parse_luks_pcr_mask(
+            "Tokens:\n  0: systemd-tpm2\n     Keyslot: 0\n",
+            &mask));
+
+    assert_false("pcr_null", trustprobe_parse_luks_pcr_mask(NULL, &mask));
+    assert_false("pcr_null_out", trustprobe_parse_luks_pcr_mask("systemd-tpm2\n", NULL));
 
     printf("storage parsers ok\n");
     return 0;

@@ -1,10 +1,26 @@
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "checks.h"
 #include "runtime.h"
 #include "storage_parsers.h"
+
+#define PCR_BIT(n) (1u << (unsigned int)(n))
+
+static void pcr_mask_to_str(uint32_t mask, char *out, size_t size) {
+    size_t pos = 0;
+    bool first = true;
+    for (unsigned int i = 0; i < 32u && pos + 6 < size; i++) {
+        if (mask & PCR_BIT(i)) {
+            if (!first) out[pos++] = ' ';
+            pos += (size_t)snprintf(out + pos, size - pos, "%u", i);
+            first = false;
+        }
+    }
+    if (pos == 0 && size > 0) out[0] = '\0';
+}
 
 size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -82,7 +98,11 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 "unable to inspect block devices");
         } else {
             size_t luks_found = 0;
-            size_t luks_with_token = 0;
+            size_t luks_no_token = 0;
+            size_t luks_token_noparsed = 0;
+            uint32_t weakest_mask = 0xFFFFFFFFu;
+            unsigned int weakest_popcount = 32u;
+            bool any_token = false;
             char *line = lsblk_buf;
 
             while (*line != '\0') {
@@ -114,9 +134,24 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                             if (trustprobe_capture_argv_status(
                                     (const char *const *)dump_argv,
                                     dump_buf, sizeof(dump_buf), &dump_status) &&
-                                dump_status == 0 &&
-                                strstr(dump_buf, "tpm2") != NULL) {
-                                luks_with_token++;
+                                dump_status == 0) {
+                                if (strstr(dump_buf, "tpm2") != NULL) {
+                                    any_token = true;
+                                    uint32_t mask = 0;
+                                    if (trustprobe_parse_luks_pcr_mask(dump_buf, &mask)) {
+                                        uint32_t tmp = mask;
+                                        unsigned int pc = 0;
+                                        while (tmp) { pc += tmp & 1u; tmp >>= 1; }
+                                        if (pc < weakest_popcount) {
+                                            weakest_popcount = pc;
+                                            weakest_mask = mask;
+                                        }
+                                    } else {
+                                        luks_token_noparsed++;
+                                    }
+                                } else {
+                                    luks_no_token++;
+                                }
                             }
                         }
                     }
@@ -128,14 +163,62 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
             if (luks_found == 0) {
                 results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
                     "no LUKS devices found");
-            } else if (luks_with_token == luks_found) {
-                char detail[TRUSTPROBE_DETAIL_MAX];
-                snprintf(detail, sizeof(detail),
-                    "LUKS has TPM2 token on %zu device(s)", luks_found);
-                results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
-            } else {
+            } else if (!any_token) {
                 results[used++] = make_result("LUKS TPM binding", CHECK_WARN,
                     "LUKS device without TPM2 token");
+            } else if (luks_no_token > 0) {
+                results[used++] = make_result("LUKS TPM binding", CHECK_WARN,
+                    "at least one LUKS device without TPM2 token");
+            } else if (weakest_mask == 0xFFFFFFFFu || weakest_mask == 0) {
+                /* token present but PCR field not parsed */
+                char detail[TRUSTPROBE_DETAIL_MAX];
+                snprintf(detail, sizeof(detail),
+                    "TPM2 token on %zu device(s); PCR binding unreadable", luks_found);
+                results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+            } else {
+                bool has7 = (weakest_mask & PCR_BIT(7)) != 0;
+                bool has4 = (weakest_mask & PCR_BIT(4)) != 0;
+                bool has9 = (weakest_mask & PCR_BIT(9)) != 0;
+                bool has0 = (weakest_mask & PCR_BIT(0)) != 0;
+                char pcr_str[64] = {0};
+                pcr_mask_to_str(weakest_mask, pcr_str, sizeof(pcr_str));
+                char detail[TRUSTPROBE_DETAIL_MAX];
+
+                if (!has7) {
+                    snprintf(detail, sizeof(detail),
+                        "PCRs: %s; PCR 7 absent, Secure Boot state unmeasured", pcr_str);
+                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                } else if (!has4 && !has9) {
+                    snprintf(detail, sizeof(detail),
+                        "PCRs: %s only; bootloader and initramfs unprotected", pcr_str);
+                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                } else if (!has9) {
+                    snprintf(detail, sizeof(detail),
+                        "PCRs: %s; initramfs unprotected", pcr_str);
+                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                } else if (has0) {
+                    if (luks_token_noparsed > 0) {
+                        snprintf(detail, sizeof(detail),
+                            "PCRs: %s; %zu device(s) PCR binding unreadable",
+                            pcr_str, luks_token_noparsed);
+                        results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                    } else {
+                        snprintf(detail, sizeof(detail),
+                            "PCRs: %s; firmware and full boot chain measured", pcr_str);
+                        results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
+                    }
+                } else {
+                    if (luks_token_noparsed > 0) {
+                        snprintf(detail, sizeof(detail),
+                            "PCRs: %s; %zu device(s) PCR binding unreadable",
+                            pcr_str, luks_token_noparsed);
+                        results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                    } else {
+                        snprintf(detail, sizeof(detail),
+                            "PCRs: %s; boot chain measured", pcr_str);
+                        results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
+                    }
+                }
             }
         }
     }
