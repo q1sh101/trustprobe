@@ -9,6 +9,5 @@
 
 size_t trustprobe_check_physical(check_result_t *results, size_t max_results);
 size_t trustprobe_check_firmware(check_result_t *results, size_t max_results);
-size_t trustprobe_check_kernel(check_result_t *results, size_t max_results);
 
 #endif
