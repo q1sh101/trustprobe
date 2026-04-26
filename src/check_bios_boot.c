@@ -1,10 +1,14 @@
 #include <ctype.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <linux/fs.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 #include "checks.h"
 #include "efi_boot_parsers.h"
@@ -313,10 +317,48 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
     return used;
 }
 
+static size_t check_efivars_immutable(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+    if (used >= max_results) return used;
+
+    if (!trustprobe_file_exists(EFI_BOOT_ORDER_PATH)) {
+        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
+            "BootOrder variable not found");
+        return used;
+    }
+
+    int fd = open(EFI_BOOT_ORDER_PATH, O_RDONLY);
+    if (fd < 0) {
+        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
+            "BootOrder variable not readable");
+        return used;
+    }
+
+    unsigned int flags = 0;
+    int ret = ioctl(fd, FS_IOC_GETFLAGS, &flags);
+    close(fd);
+
+    if (ret < 0) {
+        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
+            "immutable flag unreadable");
+        return used;
+    }
+
+    if (flags & (unsigned int)FS_IMMUTABLE_FL) {
+        results[used++] = make_result("EFI BootOrder immutable", CHECK_OK,
+            "BootOrder immutable flag set");
+    } else {
+        results[used++] = make_result("EFI BootOrder immutable", CHECK_WARN,
+            "BootOrder immutable flag not set");
+    }
+    return used;
+}
+
 size_t trustprobe_check_bios_boot(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     used += check_efivars_boot(results + used, used < max_results ? max_results - used : 0);
+    used += check_efivars_immutable(results + used, used < max_results ? max_results - used : 0);
     used += check_firmware_attrs_boot(results + used, used < max_results ? max_results - used : 0);
     used += check_firmware_password(results + used, used < max_results ? max_results - used : 0);
 
