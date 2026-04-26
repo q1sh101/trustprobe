@@ -23,6 +23,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results);
 size_t trustprobe_check_bios_boot(check_result_t *results, size_t max_results);
 size_t trustprobe_check_boot_chain(check_result_t *results, size_t max_results);
 size_t trustprobe_check_esp_posture(check_result_t *results, size_t max_results);
+size_t trustprobe_check_bios_cntl(check_result_t *results, size_t max_results);
 size_t trustprobe_check_kernel_lockdown(check_result_t *results, size_t max_results);
 size_t trustprobe_check_kernel_sysctl(check_result_t *results, size_t max_results);
 size_t trustprobe_check_kernel_tools(check_result_t *results, size_t max_results);

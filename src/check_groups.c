@@ -41,6 +41,7 @@ size_t trustprobe_check_firmware(check_result_t *results, size_t max_results) {
     used += trustprobe_check_bios_boot(results + used, REMAINING(used, max_results));
     used += trustprobe_check_boot_chain(results + used, REMAINING(used, max_results));
     used += trustprobe_check_esp_posture(results + used, REMAINING(used, max_results));
+    used += trustprobe_check_bios_cntl(results + used, REMAINING(used, max_results));
 
     return used;
 }
