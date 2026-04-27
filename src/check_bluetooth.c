@@ -24,7 +24,7 @@ static bool bluetooth_hardware_visible(void) {
     return found;
 }
 
-size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
+size_t bythos_check_bluetooth(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used < max_results) {
@@ -37,18 +37,18 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
 
     bool service_active = false;
     if (used < max_results) {
-        switch (trustprobe_probe_systemd_service("bluetooth.service")) {
-        case TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        switch (bythos_probe_systemd_service("bluetooth.service")) {
+        case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
             results[used++] = make_result("Bluetooth service", CHECK_SKIP, "systemctl not available");
             break;
-        case TRUSTPROBE_SERVICE_STATE_ACTIVE:
+        case BYTHOS_SERVICE_STATE_ACTIVE:
             service_active = true;
             results[used++] = make_result("Bluetooth service", CHECK_OK, "running");
             break;
-        case TRUSTPROBE_SERVICE_STATE_INACTIVE:
+        case BYTHOS_SERVICE_STATE_INACTIVE:
             results[used++] = make_result("Bluetooth service", CHECK_OK, "installed but inactive");
             break;
-        case TRUSTPROBE_SERVICE_STATE_MISSING:
+        case BYTHOS_SERVICE_STATE_MISSING:
             results[used++] = make_result("Bluetooth service", CHECK_SKIP, "not installed");
             break;
         default:
@@ -64,8 +64,8 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
     static const char *const btctl_argv[] = {"bluetoothctl", "show", NULL};
     char output[4096] = {0};
     int exit_status = -1;
-    bool btctl_ok = trustprobe_command_exists("bluetoothctl") &&
-                    trustprobe_capture_argv_status(btctl_argv, output, sizeof(output), &exit_status) &&
+    bool btctl_ok = bythos_command_exists("bluetoothctl") &&
+                    bythos_capture_argv_status(btctl_argv, output, sizeof(output), &exit_status) &&
                     exit_status == 0;
 
     if (used < max_results) {

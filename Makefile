@@ -4,7 +4,7 @@ LDFLAGS ?=
 
 SRC := $(sort $(wildcard src/*.c))
 OBJ := $(SRC:.c=.o)
-BIN := trustprobe
+BIN := bythos
 RULES_TEST_BIN := tests/rules_parser
 POLICY_TEST_BIN := tests/policy_parser
 FIRMWARE_TEST_BIN := tests/firmware_parsers

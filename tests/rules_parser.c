@@ -33,7 +33,7 @@ static void assert_eq_size(const char *field, size_t want, size_t got, const cha
 }
 
 int main(void) {
-    trustprobe_usbguard_rules_report_t report = {0};
+    bythos_usbguard_rules_report_t report = {0};
     const case_t cases[] = {
         {
             .path = "tests/fixtures/rules/good.conf",
@@ -70,11 +70,11 @@ int main(void) {
         },
     };
 
-    assert_false("rules_null_path", trustprobe_usbguard_rules_analyze(NULL, &report));
-    assert_false("rules_null_report", trustprobe_usbguard_rules_analyze("tests/fixtures/rules/good.conf", NULL));
+    assert_false("rules_null_path", bythos_usbguard_rules_analyze(NULL, &report));
+    assert_false("rules_null_report", bythos_usbguard_rules_analyze("tests/fixtures/rules/good.conf", NULL));
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
-        if (!trustprobe_usbguard_rules_analyze(cases[i].path, &report)) {
+        if (!bythos_usbguard_rules_analyze(cases[i].path, &report)) {
             fprintf(stderr, "rules parser failure: could not read %s\n", cases[i].path);
             return 1;
         }

@@ -13,7 +13,7 @@ typedef struct {
 static void assert_value(const char *path, const char *key, const char *expected) {
     char value[256] = {0};
 
-    if (!trustprobe_read_key_value(path, key, value, sizeof(value))) {
+    if (!bythos_read_key_value(path, key, value, sizeof(value))) {
         fprintf(stderr, "policy parser failure: key %s not found in %s\n", key, path);
         exit(1);
     }
@@ -81,7 +81,7 @@ int main(void) {
 
     {
         char value[256] = {0};
-        if (trustprobe_read_key_value("tests/fixtures/policy/good.conf", "MissingKey", value, sizeof(value))) {
+        if (bythos_read_key_value("tests/fixtures/policy/good.conf", "MissingKey", value, sizeof(value))) {
             fprintf(stderr, "policy parser failure: unexpected match for MissingKey\n");
             return 1;
         }

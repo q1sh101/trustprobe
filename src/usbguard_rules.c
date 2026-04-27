@@ -25,12 +25,12 @@ static bool starts_with(const char *text, const char *prefix) {
     return strncmp(text, prefix, strlen(prefix)) == 0;
 }
 
-bool trustprobe_usbguard_rules_analyze(const char *path, trustprobe_usbguard_rules_report_t *report) {
+bool bythos_usbguard_rules_analyze(const char *path, bythos_usbguard_rules_report_t *report) {
     if (path == NULL || report == NULL) {
         return false;
     }
 
-    *report = (trustprobe_usbguard_rules_report_t){0};
+    *report = (bythos_usbguard_rules_report_t){0};
 
     FILE *file = fopen(path, "r");
     if (file == NULL) {

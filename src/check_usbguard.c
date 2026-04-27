@@ -8,12 +8,12 @@
 #include "runtime.h"
 #include "usbguard_rules.h"
 
-size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
+size_t bythos_check_usbguard(check_result_t *results, size_t max_results) {
     size_t used = 0;
     const char *rules_path = "/etc/usbguard/rules.conf";
 
     if (used < max_results) {
-        if (trustprobe_command_exists("usbguard")) {
+        if (bythos_command_exists("usbguard")) {
             results[used++] = make_result("usbguard installed", CHECK_OK, "binary found in PATH");
         } else {
             results[used++] = make_result("usbguard installed", CHECK_FAIL, "binary not found");
@@ -21,17 +21,17 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
     }
 
     if (used < max_results) {
-        switch (trustprobe_probe_systemd_service("usbguard.service")) {
-        case TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        switch (bythos_probe_systemd_service("usbguard.service")) {
+        case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
             results[used++] = make_result("usbguard active", CHECK_WARN, "systemctl not available");
             break;
-        case TRUSTPROBE_SERVICE_STATE_ACTIVE:
+        case BYTHOS_SERVICE_STATE_ACTIVE:
             results[used++] = make_result("usbguard active", CHECK_OK, "running");
             break;
-        case TRUSTPROBE_SERVICE_STATE_INACTIVE:
+        case BYTHOS_SERVICE_STATE_INACTIVE:
             results[used++] = make_result("usbguard active", CHECK_FAIL, "installed but inactive");
             break;
-        case TRUSTPROBE_SERVICE_STATE_MISSING:
+        case BYTHOS_SERVICE_STATE_MISSING:
             results[used++] = make_result("usbguard active", CHECK_FAIL, "service unit not found");
             break;
         default:
@@ -60,8 +60,8 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
             results[used++] = make_root_result("usbguard rule inventory", CHECK_SKIP, "rules.conf not readable");
         } else {
             fclose(rules_file);
-            trustprobe_usbguard_rules_report_t report;
-            if (!trustprobe_usbguard_rules_analyze(rules_path, &report)) {
+            bythos_usbguard_rules_report_t report;
+            if (!bythos_usbguard_rules_analyze(rules_path, &report)) {
                 results[used++] = make_result("usbguard rule inventory", CHECK_WARN, "unable to parse rules.conf");
             } else {
                 char detail[128];

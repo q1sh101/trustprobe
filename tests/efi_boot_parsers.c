@@ -4,8 +4,8 @@
 #include "assert_helpers.h"
 #include "efi_boot_parsers.h"
 
-static void assert_type(const char *name, trustprobe_efi_boot_type_t got,
-                         trustprobe_efi_boot_type_t expected) {
+static void assert_type(const char *name, bythos_efi_boot_type_t got,
+                         bythos_efi_boot_type_t expected) {
     if (got != expected) {
         fprintf(stderr, "efi boot parser failure: %s (got %d, expected %d)\n",
                 name, (int)got, (int)expected);
@@ -102,8 +102,8 @@ static size_t build_dp_entry(unsigned char *buf, size_t buf_size,
 }
 
 int main(void) {
-    trustprobe_efi_boot_order_t order = {0};
-    trustprobe_efi_boot_entry_t entry = {0};
+    bythos_efi_boot_order_t order = {0};
+    bythos_efi_boot_entry_t entry = {0};
     unsigned char buf[512];
     size_t len;
 
@@ -114,7 +114,7 @@ int main(void) {
             0x00, 0x00,
             0x05, 0x00,
         };
-        assert_true("boot_order_parse", trustprobe_parse_efi_boot_order(data, sizeof(data), &order));
+        assert_true("boot_order_parse", bythos_parse_efi_boot_order(data, sizeof(data), &order));
         assert_eq_sz("boot_order_count", order.order_count, 3);
         assert_eq_u16("boot_order_0", order.order[0], 0x0002);
         assert_eq_u16("boot_order_1", order.order[1], 0x0000);
@@ -126,62 +126,62 @@ int main(void) {
             0x07, 0x00, 0x00, 0x00,
             0x03, 0x00,
         };
-        assert_true("boot_order_single", trustprobe_parse_efi_boot_order(data, sizeof(data), &order));
+        assert_true("boot_order_single", bythos_parse_efi_boot_order(data, sizeof(data), &order));
         assert_eq_sz("boot_order_single_count", order.order_count, 1);
     }
 
     {
         unsigned char data[] = {0x07, 0x00, 0x00, 0x00};
-        assert_false("boot_order_empty", trustprobe_parse_efi_boot_order(data, sizeof(data), &order));
+        assert_false("boot_order_empty", bythos_parse_efi_boot_order(data, sizeof(data), &order));
     }
 
     {
         unsigned char data[] = {0x07, 0x00};
-        assert_false("boot_order_short", trustprobe_parse_efi_boot_order(data, sizeof(data), &order));
+        assert_false("boot_order_short", bythos_parse_efi_boot_order(data, sizeof(data), &order));
     }
 
     /* partition-based entry, how grub-install registers itself */
     len = build_dp_entry(buf, sizeof(buf), 0x01, "ubuntu", 0x04, 0x01);
-    assert_true("dp_hd_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0002, &entry));
-    assert_type("dp_hd_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_DISK);
+    assert_true("dp_hd_parse", bythos_parse_efi_boot_entry(buf, len, 0x0002, &entry));
+    assert_type("dp_hd_type", entry.type, BYTHOS_EFI_BOOT_TYPE_DISK);
     assert_true("dp_hd_active", entry.active);
 
     /* BEV = CSM bootstrap entry vector, how removable USB appears with CSM on */
     len = build_bbs_entry(buf, sizeof(buf), 0x01, "UEFI:Removable Device", 0x80);
-    assert_true("bbs_usb_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0004, &entry));
-    assert_type("bbs_usb_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_USB);
+    assert_true("bbs_usb_parse", bythos_parse_efi_boot_entry(buf, len, 0x0004, &entry));
+    assert_type("bbs_usb_type", entry.type, BYTHOS_EFI_BOOT_TYPE_USB);
 
     /* legacy PXE via BBS - load_attrs=0 means disabled in boot order */
     len = build_bbs_entry(buf, sizeof(buf), 0x00, "UEFI:Network Device", 0x06);
-    assert_true("bbs_net_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0005, &entry));
-    assert_type("bbs_net_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_NETWORK);
+    assert_true("bbs_net_parse", bythos_parse_efi_boot_entry(buf, len, 0x0005, &entry));
+    assert_type("bbs_net_type", entry.type, BYTHOS_EFI_BOOT_TYPE_NETWORK);
     assert_false("bbs_net_inactive", entry.active);
 
     /* UEFI-native USB messaging path, distinct from legacy BBS */
     len = build_dp_entry(buf, sizeof(buf), 0x01, "Some USB", 0x03, 0x05);
-    assert_true("dp_usb_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0010, &entry));
-    assert_type("dp_usb_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_USB);
+    assert_true("dp_usb_parse", bythos_parse_efi_boot_entry(buf, len, 0x0010, &entry));
+    assert_type("dp_usb_type", entry.type, BYTHOS_EFI_BOOT_TYPE_USB);
 
     /* FilePath entries: shimx64.efi, bootmgfw.efi both register as this */
     len = build_dp_entry(buf, sizeof(buf), 0x01, "Windows Boot Manager", 0x04, 0x04);
-    assert_true("dp_filepath_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0016, &entry));
-    assert_type("dp_filepath_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_DISK);
+    assert_true("dp_filepath_parse", bythos_parse_efi_boot_entry(buf, len, 0x0016, &entry));
+    assert_type("dp_filepath_type", entry.type, BYTHOS_EFI_BOOT_TYPE_DISK);
 
     /* UEFI PXE over IPv4 - separate code path from BBS network */
     len = build_dp_entry(buf, sizeof(buf), 0x01, "PXE Boot", 0x03, 0x0C);
-    assert_true("dp_ipv4_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0012, &entry));
-    assert_type("dp_ipv4_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_NETWORK);
+    assert_true("dp_ipv4_parse", bythos_parse_efi_boot_entry(buf, len, 0x0012, &entry));
+    assert_type("dp_ipv4_type", entry.type, BYTHOS_EFI_BOOT_TYPE_NETWORK);
 
     /* unrecognized dp type - parser should fall back to description keywords */
     len = build_dp_entry(buf, sizeof(buf), 0x01, "USB Flash Drive", 0x01, 0x01);
-    assert_true("desc_usb_parse", trustprobe_parse_efi_boot_entry(buf, len, 0x0020, &entry));
-    assert_type("desc_usb_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_USB);
+    assert_true("desc_usb_parse", bythos_parse_efi_boot_entry(buf, len, 0x0020, &entry));
+    assert_type("desc_usb_type", entry.type, BYTHOS_EFI_BOOT_TYPE_USB);
 
     {
         unsigned char short_data[] = {0x07, 0x00, 0x00, 0x00, 0x01, 0x00};
-        assert_false("entry_short", trustprobe_parse_efi_boot_entry(short_data, sizeof(short_data), 0, &entry));
+        assert_false("entry_short", bythos_parse_efi_boot_entry(short_data, sizeof(short_data), 0, &entry));
     }
-    assert_false("entry_null_output", trustprobe_parse_efi_boot_entry(buf, len, 0, NULL));
+    assert_false("entry_null_output", bythos_parse_efi_boot_entry(buf, len, 0, NULL));
 
     /* Non-ASCII UTF-16 should degrade to '?' without corrupting ASCII around it. */
     {
@@ -195,7 +195,7 @@ int main(void) {
             0x00, 0x00,
             0x7F, 0xFF, 0x04, 0x00,
         };
-        assert_true("nonascii_parse", trustprobe_parse_efi_boot_entry(data, sizeof(data), 0x0040, &entry));
+        assert_true("nonascii_parse", bythos_parse_efi_boot_entry(data, sizeof(data), 0x0040, &entry));
         assert_true("nonascii_desc_a", entry.description[0] == 'A');
         assert_true("nonascii_desc_q", entry.description[1] == '?');
         assert_true("nonascii_desc_b", entry.description[2] == 'B');
@@ -212,9 +212,9 @@ int main(void) {
             0x80, 0x00, 0x00, 0x00,
             0x7F, 0xFF, 0x04, 0x00,
         };
-        assert_true("empty_desc_parse", trustprobe_parse_efi_boot_entry(data, sizeof(data), 0x0050, &entry));
+        assert_true("empty_desc_parse", bythos_parse_efi_boot_entry(data, sizeof(data), 0x0050, &entry));
         assert_true("empty_desc_str", entry.description[0] == '\0');
-        assert_type("empty_desc_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_USB);
+        assert_type("empty_desc_type", entry.type, BYTHOS_EFI_BOOT_TYPE_USB);
     }
 
     /* No device path at all; classifier should fall back to description. */
@@ -228,8 +228,8 @@ int main(void) {
             0x6B, 0x00,
             0x00, 0x00,
         };
-        assert_true("no_dp_parse", trustprobe_parse_efi_boot_entry(data, sizeof(data), 0x0051, &entry));
-        assert_type("no_dp_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_NETWORK);
+        assert_true("no_dp_parse", bythos_parse_efi_boot_entry(data, sizeof(data), 0x0051, &entry));
+        assert_type("no_dp_type", entry.type, BYTHOS_EFI_BOOT_TYPE_NETWORK);
     }
 
     /* trailing odd byte in BootOrder payload gets ignored */
@@ -240,7 +240,7 @@ int main(void) {
             0x00, 0x00,
             0xFF,        /* trailing odd byte */
         };
-        assert_true("odd_order_parse", trustprobe_parse_efi_boot_order(data, sizeof(data), &order));
+        assert_true("odd_order_parse", bythos_parse_efi_boot_order(data, sizeof(data), &order));
         assert_eq_sz("odd_order_count", order.order_count, 2);
     }
 
@@ -254,8 +254,8 @@ int main(void) {
             0x03, 0x0C, 0x02, 0x00,  /* len=2, below minimum */
             0x7F, 0xFF, 0x04, 0x00,
         };
-        assert_true("malformed_dp_parse", trustprobe_parse_efi_boot_entry(data, sizeof(data), 0x0052, &entry));
-        assert_type("malformed_dp_type", entry.type, TRUSTPROBE_EFI_BOOT_TYPE_UNKNOWN);
+        assert_true("malformed_dp_parse", bythos_parse_efi_boot_entry(data, sizeof(data), 0x0052, &entry));
+        assert_type("malformed_dp_type", entry.type, BYTHOS_EFI_BOOT_TYPE_UNKNOWN);
     }
 
     {
@@ -264,14 +264,14 @@ int main(void) {
             0x07, 0x00,
         };
         uint16_t next_num = 0;
-        assert_true("bootnext_parse", trustprobe_parse_efi_boot_next(data, sizeof(data), &next_num));
+        assert_true("bootnext_parse", bythos_parse_efi_boot_next(data, sizeof(data), &next_num));
         assert_eq_u16("bootnext_value", next_num, 0x0007);
     }
 
     {
         unsigned char data[] = {0x07, 0x00, 0x00, 0x00, 0x03};
         uint16_t next_num = 0;
-        assert_false("bootnext_short", trustprobe_parse_efi_boot_next(data, sizeof(data), &next_num));
+        assert_false("bootnext_short", bythos_parse_efi_boot_next(data, sizeof(data), &next_num));
     }
 
     {
@@ -280,7 +280,7 @@ int main(void) {
             0x00, 0x00,
         };
         uint16_t next_num = 0xFFFF;
-        assert_true("bootnext_zero", trustprobe_parse_efi_boot_next(data, sizeof(data), &next_num));
+        assert_true("bootnext_zero", bythos_parse_efi_boot_next(data, sizeof(data), &next_num));
         assert_eq_u16("bootnext_zero_value", next_num, 0x0000);
     }
 
@@ -291,19 +291,19 @@ int main(void) {
             0x00, 0x00, 0x00, 0x00,
         };
         assert_true("sigdb_nonempty",
-            trustprobe_classify_efi_sigdb(data, sizeof(data)) == TRUSTPROBE_EFI_SIGDB_NONEMPTY);
+            bythos_classify_efi_sigdb(data, sizeof(data)) == BYTHOS_EFI_SIGDB_NONEMPTY);
     }
 
     {
         unsigned char data[] = {0x07, 0x00, 0x00, 0x00};
         assert_true("sigdb_empty",
-            trustprobe_classify_efi_sigdb(data, sizeof(data)) == TRUSTPROBE_EFI_SIGDB_EMPTY);
+            bythos_classify_efi_sigdb(data, sizeof(data)) == BYTHOS_EFI_SIGDB_EMPTY);
     }
 
     {
         unsigned char data[] = {0x07, 0x00, 0x00};
         assert_true("sigdb_short",
-            trustprobe_classify_efi_sigdb(data, sizeof(data)) == TRUSTPROBE_EFI_SIGDB_INVALID);
+            bythos_classify_efi_sigdb(data, sizeof(data)) == BYTHOS_EFI_SIGDB_INVALID);
     }
 
     printf("efi boot parser: all tests passed\n");

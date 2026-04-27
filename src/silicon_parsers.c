@@ -30,12 +30,12 @@ static bool token_present(const char *text, const char *needle) {
     return false;
 }
 
-void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t *cmdline) {
+void bythos_parse_iommu_cmdline(const char *text, bythos_iommu_cmdline_t *cmdline) {
     if (cmdline == NULL) {
         return;
     }
 
-    *cmdline = (trustprobe_iommu_cmdline_t){0};
+    *cmdline = (bythos_iommu_cmdline_t){0};
 
     if (text == NULL || *text == '\0') {
         return;
@@ -59,7 +59,7 @@ void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t
     cmdline->strict_off = token_present(text, "iommu.strict=0");
 }
 
-int trustprobe_pcr_zero_check(const char *buf, unsigned int pcr_num) {
+int bythos_pcr_zero_check(const char *buf, unsigned int pcr_num) {
     if (buf == NULL) return -1;
 
     char prefix[8];
@@ -98,10 +98,10 @@ int trustprobe_pcr_zero_check(const char *buf, unsigned int pcr_num) {
     return -1;
 }
 
-trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void) {
+bythos_cpu_vendor_t bythos_cpu_vendor(void) {
     char buf[4096] = {0};
-    if (!trustprobe_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {
-        return TRUSTPROBE_CPU_VENDOR_UNKNOWN;
+    if (!bythos_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {
+        return BYTHOS_CPU_VENDOR_UNKNOWN;
     }
 
     const char *cursor = buf;
@@ -112,8 +112,8 @@ trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void) {
             if (colon != NULL) {
                 colon++;
                 while (*colon == ' ' || *colon == '\t') colon++;
-                if (strncmp(colon, "AuthenticAMD", 12) == 0) return TRUSTPROBE_CPU_VENDOR_AMD;
-                if (strncmp(colon, "GenuineIntel", 12) == 0) return TRUSTPROBE_CPU_VENDOR_INTEL;
+                if (strncmp(colon, "AuthenticAMD", 12) == 0) return BYTHOS_CPU_VENDOR_AMD;
+                if (strncmp(colon, "GenuineIntel", 12) == 0) return BYTHOS_CPU_VENDOR_INTEL;
             }
             break;
         }
@@ -121,10 +121,10 @@ trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void) {
         while (*cursor == '\r' || *cursor == '\n') cursor++;
     }
 
-    return TRUSTPROBE_CPU_VENDOR_UNKNOWN;
+    return BYTHOS_CPU_VENDOR_UNKNOWN;
 }
 
-bool trustprobe_extract_microcode_revision(const char *text, char *buffer, size_t size) {
+bool bythos_extract_microcode_revision(const char *text, char *buffer, size_t size) {
     if (text == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -142,11 +142,11 @@ bool trustprobe_extract_microcode_revision(const char *text, char *buffer, size_
         memcpy(line, cursor, line_len);
         line[line_len] = '\0';
 
-        char *lhs = trustprobe_trim(line);
+        char *lhs = bythos_trim(line);
         if (strncmp(lhs, "microcode", 9) == 0) {
             char *sep = strchr(lhs, ':');
             if (sep != NULL) {
-                char *rhs = trustprobe_trim(sep + 1);
+                char *rhs = bythos_trim(sep + 1);
                 if (*rhs != '\0') {
                     snprintf(buffer, size, "%s", rhs);
                     return true;

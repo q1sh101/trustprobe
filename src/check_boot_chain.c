@@ -23,11 +23,11 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
 
     const char *const *argv = NULL;
 
-    if (trustprobe_command_exists("grub-install")) {
+    if (bythos_command_exists("grub-install")) {
         argv = grub_argv;
-    } else if (trustprobe_command_exists("grub2-install")) {
+    } else if (bythos_command_exists("grub2-install")) {
         argv = grub2_argv;
-    } else if (trustprobe_command_exists("bootctl")) {
+    } else if (bythos_command_exists("bootctl")) {
         argv = bootctl_argv;
     }
 
@@ -39,15 +39,15 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
 
     char buf[256] = {0};
     int exit_status = -1;
-    if (!trustprobe_capture_argv_status(argv, buf, sizeof(buf), &exit_status) ||
+    if (!bythos_capture_argv_status(argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0 || buf[0] == '\0') {
         results[used++] = make_result("bootloader version", CHECK_SKIP,
             "bootloader version unreadable");
         return used;
     }
 
-    char *trimmed = trustprobe_trim(buf);
-    char detail[TRUSTPROBE_DETAIL_MAX];
+    char *trimmed = bythos_trim(buf);
+    char detail[BYTHOS_DETAIL_MAX];
     snprintf(detail, sizeof(detail), "%.160s; no CVE comparison available", trimmed);
     results[used++] = make_result("bootloader version", CHECK_SKIP, detail);
     return used;
@@ -125,7 +125,7 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
         return used;
     }
 
-    if (!trustprobe_command_exists("pesign")) {
+    if (!bythos_command_exists("pesign")) {
         results[used++] = make_result("shim signature", CHECK_SKIP,
             "pesign not available");
         return used;
@@ -135,7 +135,7 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
     char buf[2048] = {0};
     int exit_status = -1;
 
-    if (!trustprobe_capture_argv_status(
+    if (!bythos_capture_argv_status(
             (const char *const *)pesign_argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0) {
         results[used++] = make_result("shim signature", CHECK_WARN,
@@ -173,7 +173,7 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
 
     size_t count = 0;
     bool any_warn = false;
-    char warn_detail[TRUSTPROBE_DETAIL_MAX] = {0};
+    char warn_detail[BYTHOS_DETAIL_MAX] = {0};
 
     struct dirent *entry;
     while ((entry = readdir(boot)) != NULL) {
@@ -222,10 +222,10 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     if (any_warn) {
         results[used++] = make_result("initramfs permissions", CHECK_WARN, warn_detail);
     } else {
-        char detail[TRUSTPROBE_DETAIL_MAX];
+        char detail[BYTHOS_DETAIL_MAX];
         snprintf(detail, sizeof(detail),
             "%zu %s root-owned and not writable",
-            count, trustprobe_pl(count, "image", "images"));
+            count, bythos_pl(count, "image", "images"));
         results[used++] = make_result("initramfs permissions", CHECK_OK, detail);
     }
     return used;
@@ -239,18 +239,18 @@ static size_t check_sbat_revocations(check_result_t *results, size_t max_results
     char buf[2048] = {0};
     int exit_status = -1;
 
-    if (!trustprobe_command_exists("mokutil")) {
+    if (!bythos_command_exists("mokutil")) {
         results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil not installed");
         return used;
     }
 
-    if (!trustprobe_capture_argv_status(sbat_argv, buf, sizeof(buf), &exit_status) ||
+    if (!bythos_capture_argv_status(sbat_argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0) {
         results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil SBAT query failed");
         return used;
     }
 
-    if (!trustprobe_sbat_entries_present(trustprobe_trim(buf))) {
+    if (!bythos_sbat_entries_present(bythos_trim(buf))) {
         results[used++] = make_result("SBAT revocations", CHECK_WARN,
             "no revocation entries applied");
     } else {
@@ -260,7 +260,7 @@ static size_t check_sbat_revocations(check_result_t *results, size_t max_results
     return used;
 }
 
-size_t trustprobe_check_boot_chain(check_result_t *results, size_t max_results) {
+size_t bythos_check_boot_chain(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (results == NULL || max_results == 0) {

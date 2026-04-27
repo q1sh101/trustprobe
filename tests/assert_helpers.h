@@ -1,5 +1,5 @@
-#ifndef TRUSTPROBE_TEST_ASSERT_HELPERS_H
-#define TRUSTPROBE_TEST_ASSERT_HELPERS_H
+#ifndef BYTHOS_TEST_ASSERT_HELPERS_H
+#define BYTHOS_TEST_ASSERT_HELPERS_H
 
 #include <stdbool.h>
 #include <stdint.h>

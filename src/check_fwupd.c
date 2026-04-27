@@ -8,27 +8,27 @@
 #include "runtime.h"
 #include "silicon_parsers.h"
 
-size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
+size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     size_t used = 0;
     const char *lvfs_conf = "/etc/fwupd/remotes.d/lvfs.conf";
     bool has_fwupdmgr = false;
     static const char *fwupd_devices_argv[] = {"fwupdmgr", "get-devices", NULL};
     static const char *fwupd_updates_argv[] = {"fwupdmgr", "get-updates", NULL};
 
-    has_fwupdmgr = trustprobe_command_exists("fwupdmgr");
+    has_fwupdmgr = bythos_command_exists("fwupdmgr");
 
     if (used < max_results) {
-        switch (trustprobe_probe_systemd_service("fwupd.service")) {
-        case TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        switch (bythos_probe_systemd_service("fwupd.service")) {
+        case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
             results[used++] = make_result("fwupd service", CHECK_SKIP, "systemctl not available");
             break;
-        case TRUSTPROBE_SERVICE_STATE_ACTIVE:
+        case BYTHOS_SERVICE_STATE_ACTIVE:
             results[used++] = make_result("fwupd service", CHECK_OK, "running");
             break;
-        case TRUSTPROBE_SERVICE_STATE_INACTIVE:
+        case BYTHOS_SERVICE_STATE_INACTIVE:
             results[used++] = make_result("fwupd service", CHECK_WARN, "installed but inactive");
             break;
-        case TRUSTPROBE_SERVICE_STATE_MISSING:
+        case BYTHOS_SERVICE_STATE_MISSING:
             results[used++] = make_result("fwupd service", CHECK_WARN, "not installed");
             break;
         default:
@@ -41,9 +41,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         char enabled[32] = {0};
         if (!has_fwupdmgr) {
             results[used++] = make_result("LVFS remote", CHECK_SKIP, "fwupdmgr not installed");
-        } else if (!trustprobe_file_exists(lvfs_conf)) {
+        } else if (!bythos_file_exists(lvfs_conf)) {
             results[used++] = make_result("LVFS remote", CHECK_WARN, "lvfs.conf not found");
-        } else if (!trustprobe_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
+        } else if (!bythos_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
             results[used++] = make_result("LVFS remote", CHECK_WARN, "Enabled key not found");
         } else if (strcmp(enabled, "true") == 0) {
             results[used++] = make_result("LVFS remote", CHECK_OK, "enabled");
@@ -56,7 +56,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         int devices = -1;
         if (!has_fwupdmgr) {
             results[used++] = make_result("firmware inventory", CHECK_SKIP, "fwupdmgr not installed");
-        } else if ((devices = trustprobe_run_argv_quiet(fwupd_devices_argv)) == 0) {
+        } else if ((devices = bythos_run_argv_quiet(fwupd_devices_argv)) == 0) {
             results[used++] = make_result("firmware inventory", CHECK_OK, "device list available");
         } else {
             results[used++] = make_result("firmware inventory", CHECK_SKIP, "unable to list devices");
@@ -66,15 +66,15 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
     if (used < max_results) {
         char buffer[2048] = {0};
         int status = -1;
-        trustprobe_fwupd_updates_status_t updates = TRUSTPROBE_FWUPD_UPDATES_UNKNOWN;
+        bythos_fwupd_updates_status_t updates = BYTHOS_FWUPD_UPDATES_UNKNOWN;
 
         if (!has_fwupdmgr) {
             results[used++] = make_result("firmware update status", CHECK_SKIP, "fwupdmgr not installed");
-        } else if (!trustprobe_capture_argv_status(fwupd_updates_argv, buffer, sizeof(buffer), &status)) {
+        } else if (!bythos_capture_argv_status(fwupd_updates_argv, buffer, sizeof(buffer), &status)) {
             results[used++] = make_result("firmware update status", CHECK_SKIP, "unable to query");
-        } else if ((updates = trustprobe_parse_fwupd_updates(buffer, status)) == TRUSTPROBE_FWUPD_UPDATES_NONE) {
+        } else if ((updates = bythos_parse_fwupd_updates(buffer, status)) == BYTHOS_FWUPD_UPDATES_NONE) {
             results[used++] = make_result("firmware update status", CHECK_OK, "no updates available");
-        } else if (updates == TRUSTPROBE_FWUPD_UPDATES_AVAILABLE) {
+        } else if (updates == BYTHOS_FWUPD_UPDATES_AVAILABLE) {
             results[used++] = make_result("firmware update status", CHECK_WARN, "updates available");
         } else {
             results[used++] = make_result("firmware update status", CHECK_SKIP, "unavailable");
@@ -89,7 +89,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
 
         if (!has_fwupdmgr) {
             results[used++] = make_result("firmware update history", CHECK_SKIP, "fwupdmgr not installed");
-        } else if (!trustprobe_capture_argv_status(fwupd_history_argv, hist_buffer, sizeof(hist_buffer), &hist_status)) {
+        } else if (!bythos_capture_argv_status(fwupd_history_argv, hist_buffer, sizeof(hist_buffer), &hist_status)) {
             results[used++] = make_result("firmware update history", CHECK_SKIP, "history unavailable");
         } else if (hist_status != 0) {
             results[used++] = make_result("firmware update history", CHECK_SKIP, "history unavailable");
@@ -106,13 +106,13 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
     bool hsi_ok = false;
 
     if (has_fwupdmgr &&
-        trustprobe_capture_argv_status(hsi_argv, hsi_json, sizeof(hsi_json), &hsi_status) &&
+        bythos_capture_argv_status(hsi_argv, hsi_json, sizeof(hsi_json), &hsi_status) &&
         hsi_status == 0 &&
         hsi_json[0] != '\0') {
         hsi_ok = true;
     }
 
-    trustprobe_cpu_vendor_t vendor = trustprobe_cpu_vendor();
+    bythos_cpu_vendor_t vendor = bythos_cpu_vendor();
 
     if (!hsi_ok) {
         if (used < max_results) {
@@ -126,7 +126,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
     do { \
         if (used < max_results) { \
             char _v[64] = {0}; \
-            if (!trustprobe_hsi_find_result(hsi_json, (id_), _v, sizeof(_v))) { \
+            if (!bythos_hsi_find_result(hsi_json, (id_), _v, sizeof(_v))) { \
                 results[used++] = make_result((name_), CHECK_SKIP, "not reported"); \
             } else if (strcmp(_v, "not-supported") == 0) { \
                 results[used++] = make_result((name_), CHECK_SKIP, "not supported"); \
@@ -183,7 +183,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
              "memory encryption active",              "memory encryption not active");
 
     /* AMD-only */
-    if (vendor == TRUSTPROBE_CPU_VENDOR_AMD) {
+    if (vendor == BYTHOS_CPU_VENDOR_AMD) {
         EMIT_HSI("HSI: SMM locked",
                  "org.fwupd.hsi.Amd.SmmLocked",          "locked",
                  "locked",                                "not locked");
@@ -199,7 +199,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
     }
 
     /* Intel-only */
-    if (vendor == TRUSTPROBE_CPU_VENDOR_INTEL) {
+    if (vendor == BYTHOS_CPU_VENDOR_INTEL) {
         EMIT_HSI("HSI: BIOS write protection",
                  "org.fwupd.hsi.BiosWriteProtection",     "enabled",
                  "enabled",                               "not enabled");
@@ -216,9 +216,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         if (used < max_results) {
             char en_val[64]  = {0};
             char ver_val[64] = {0};
-            bool has_en  = trustprobe_hsi_find_result(hsi_json,
+            bool has_en  = bythos_hsi_find_result(hsi_json,
                                "org.fwupd.hsi.IntelBootguard.Enabled", en_val, sizeof(en_val));
-            bool has_ver = trustprobe_hsi_find_result(hsi_json,
+            bool has_ver = bythos_hsi_find_result(hsi_json,
                                "org.fwupd.hsi.IntelBootguard.Verified", ver_val, sizeof(ver_val));
 
             if (!has_en) {
@@ -237,9 +237,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         if (used < max_results) {
             char intel_en[64] = {0};
             char intel_lk[64] = {0};
-            bool has_en = trustprobe_hsi_find_result(hsi_json,
+            bool has_en = bythos_hsi_find_result(hsi_json,
                               "org.fwupd.hsi.SpiWriteProtection.Enabled", intel_en, sizeof(intel_en));
-            bool has_lk = trustprobe_hsi_find_result(hsi_json,
+            bool has_lk = bythos_hsi_find_result(hsi_json,
                               "org.fwupd.hsi.SpiWriteProtection.Locked",  intel_lk, sizeof(intel_lk));
 
             if (!has_en && !has_lk) {

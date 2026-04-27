@@ -72,7 +72,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
         /* FAT32 d_type is often DT_UNKNOWN; use stat to confirm directory */
         if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
         total++;
-        if (!trustprobe_esp_is_known_vendor(entry->d_name) && unexpected[0] == '\0') {
+        if (!bythos_esp_is_known_vendor(entry->d_name) && unexpected[0] == '\0') {
             snprintf(unexpected, sizeof(unexpected), "%.60s", entry->d_name);
         }
     }
@@ -82,13 +82,13 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
         results[used++] = make_result("EFI vendor directories", CHECK_WARN,
             "no vendor directories found");
     } else if (unexpected[0] != '\0') {
-        char detail[TRUSTPROBE_DETAIL_MAX];
+        char detail[BYTHOS_DETAIL_MAX];
         snprintf(detail, sizeof(detail), "unrecognized vendor: %s", unexpected);
         results[used++] = make_result("EFI vendor directories", CHECK_WARN, detail);
     } else {
-        char detail[TRUSTPROBE_DETAIL_MAX];
+        char detail[BYTHOS_DETAIL_MAX];
         snprintf(detail, sizeof(detail), "%zu vendor %s",
-            total, trustprobe_pl(total, "directory; recognized", "directories; all recognized"));
+            total, bythos_pl(total, "directory; recognized", "directories; all recognized"));
         results[used++] = make_result("EFI vendor directories", CHECK_OK, detail);
     }
     return used;
@@ -104,7 +104,7 @@ static bool find_shim(char *path_out, size_t size) {
         char candidate[PATH_MAX];
         if (snprintf(candidate, sizeof(candidate), "%s/%s/shimx64.efi",
                      ESP_EFI_BASE, vendor->d_name) >= (int)sizeof(candidate)) continue;
-        if (trustprobe_file_exists(candidate)) {
+        if (bythos_file_exists(candidate)) {
             snprintf(path_out, size, "%s", candidate);
             found = true;
         }
@@ -120,8 +120,8 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     /* UEFI fallback path used by attackers to persist across BootOrder resets */
     const char *upper = "/boot/efi/EFI/BOOT/BOOTX64.EFI";
     const char *lower = "/boot/efi/EFI/BOOT/bootx64.efi";
-    const char *bootx64 = trustprobe_file_exists(upper) ? upper :
-                          trustprobe_file_exists(lower) ? lower : NULL;
+    const char *bootx64 = bythos_file_exists(upper) ? upper :
+                          bythos_file_exists(lower) ? lower : NULL;
 
     if (bootx64 == NULL) {
         results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
@@ -144,7 +144,7 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
         return used;
     }
 
-    if (!trustprobe_command_exists("sha256sum")) {
+    if (!bythos_command_exists("sha256sum")) {
         results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
             "present; sha256sum unavailable for identity check");
         return used;
@@ -155,9 +155,9 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     char boot_out[256] = {0}, shim_out[256] = {0};
     int exit_a = -1, exit_b = -1;
 
-    if (!trustprobe_capture_argv_status((const char *const *)boot_argv,
+    if (!bythos_capture_argv_status((const char *const *)boot_argv,
                                         boot_out, sizeof(boot_out), &exit_a) || exit_a != 0 ||
-        !trustprobe_capture_argv_status((const char *const *)shim_argv,
+        !bythos_capture_argv_status((const char *const *)shim_argv,
                                         shim_out, sizeof(shim_out), &exit_b) || exit_b != 0) {
         results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
             "present; hash unavailable");
@@ -165,8 +165,8 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     }
 
     char boot_hash[128] = {0}, shim_hash[128] = {0};
-    if (!trustprobe_parse_sha256sum_line(boot_out, boot_hash, sizeof(boot_hash)) ||
-        !trustprobe_parse_sha256sum_line(shim_out, shim_hash, sizeof(shim_hash))) {
+    if (!bythos_parse_sha256sum_line(boot_out, boot_hash, sizeof(boot_hash)) ||
+        !bythos_parse_sha256sum_line(shim_out, shim_hash, sizeof(shim_hash))) {
         results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
             "present; hash parse failed");
         return used;
@@ -204,16 +204,16 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
         results[used++] = make_result("ESP UpdateCapsule", CHECK_OK,
             "directory empty");
     } else {
-        char detail[TRUSTPROBE_DETAIL_MAX];
+        char detail[BYTHOS_DETAIL_MAX];
         snprintf(detail, sizeof(detail),
             "%zu %s pending; firmware will apply on next reboot",
-            count, trustprobe_pl(count, "file", "files"));
+            count, bythos_pl(count, "file", "files"));
         results[used++] = make_result("ESP UpdateCapsule", CHECK_WARN, detail);
     }
     return used;
 }
 
-size_t trustprobe_check_esp_posture(check_result_t *results, size_t max_results) {
+size_t bythos_check_esp_posture(check_result_t *results, size_t max_results) {
     size_t used = 0;
     size_t remaining;
 

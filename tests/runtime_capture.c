@@ -9,7 +9,7 @@
 #include "test_harness.h"
 #include "runtime.h"
 
-static void assert_state(const char *name, trustprobe_service_state_t want, trustprobe_service_state_t got) {
+static void assert_state(const char *name, bythos_service_state_t want, bythos_service_state_t got) {
     if (want != got) {
         fprintf(stderr, "runtime capture failure: %s expected state %d, got %d\n", name, (int)want, (int)got);
         exit(1);
@@ -19,9 +19,9 @@ static void assert_state(const char *name, trustprobe_service_state_t want, trus
 static void assert_service_probe_with_script(
     const char *name,
     const char *script,
-    trustprobe_service_state_t expected
+    bythos_service_state_t expected
 ) {
-    char template[] = "./tmp-trustprobe-runtime-XXXXXX";
+    char template[] = "./tmp-bythos-runtime-XXXXXX";
     char script_path[PATH_MAX];
     char *dir = mkdtemp(template);
     if (dir == NULL) {
@@ -45,7 +45,7 @@ static void assert_service_probe_with_script(
         exit(1);
     }
 
-    trustprobe_service_state_t got = trustprobe_probe_systemd_service("mock.service");
+    bythos_service_state_t got = bythos_probe_systemd_service("mock.service");
     restore_path(saved_path);
 
     unlink(script_path);
@@ -67,7 +67,7 @@ int main(void) {
 
     assert_true(
         "capture_large_output",
-        trustprobe_capture_argv_status(argv, buffer, sizeof(buffer), &exit_status)
+        bythos_capture_argv_status(argv, buffer, sizeof(buffer), &exit_status)
     );
     assert_eq_int("capture_large_output_exit_status", exit_status, 0);
     assert_eq_int("capture_large_output_truncated_length", (int)strlen(buffer), (int)sizeof(buffer) - 1);
@@ -81,29 +81,29 @@ int main(void) {
 
     assert_true(
         "read_key_value_quoted_false",
-        trustprobe_read_key_value("tests/fixtures/runtime/key_values.conf", "usb-protection", value, sizeof(value))
+        bythos_read_key_value("tests/fixtures/runtime/key_values.conf", "usb-protection", value, sizeof(value))
     );
     assert_true("read_key_value_quoted_false_value", strcmp(value, "false") == 0);
 
     assert_true(
         "read_key_value_single_quoted_true",
-        trustprobe_read_key_value("tests/fixtures/runtime/key_values.conf", "autorun-never", value, sizeof(value))
+        bythos_read_key_value("tests/fixtures/runtime/key_values.conf", "autorun-never", value, sizeof(value))
     );
     assert_true("read_key_value_single_quoted_true_value", strcmp(value, "true") == 0);
 
     assert_true(
         "read_key_value_plain_true",
-        trustprobe_read_key_value("tests/fixtures/runtime/key_values.conf", "Enabled", value, sizeof(value))
+        bythos_read_key_value("tests/fixtures/runtime/key_values.conf", "Enabled", value, sizeof(value))
     );
     assert_true("read_key_value_plain_true_value", strcmp(value, "true") == 0);
 
     /* reject a NULL path before fopen() gets a chance to crash */
     assert_false("read_file_text_null",
-        trustprobe_read_file_text(NULL, buffer, sizeof(buffer)));
-    assert_true("trim_null", trustprobe_trim(NULL) == NULL);
+        bythos_read_file_text(NULL, buffer, sizeof(buffer)));
+    assert_true("trim_null", bythos_trim(NULL) == NULL);
 
     {
-        char template[] = "./tmp-trustprobe-runtime-empty-XXXXXX";
+        char template[] = "./tmp-bythos-runtime-empty-XXXXXX";
         char *dir = mkdtemp(template);
         if (dir == NULL) {
             fprintf(stderr, "runtime capture failure: could not create temp dir for empty PATH\n");
@@ -125,8 +125,8 @@ int main(void) {
 
         assert_state(
             "service_probe_systemctl_unavailable",
-            TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE,
-            trustprobe_probe_systemd_service("mock.service")
+            BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE,
+            bythos_probe_systemd_service("mock.service")
         );
 
         restore_path(saved_path);
@@ -139,7 +139,7 @@ int main(void) {
         "if [ \"$1\" = \"is-active\" ]; then exit 0; fi\n"
         "if [ \"$1\" = \"show\" ]; then printf 'loaded\\n'; exit 0; fi\n"
         "exit 2\n",
-        TRUSTPROBE_SERVICE_STATE_ACTIVE
+        BYTHOS_SERVICE_STATE_ACTIVE
     );
     assert_service_probe_with_script(
         "service_probe_inactive",
@@ -147,7 +147,7 @@ int main(void) {
         "if [ \"$1\" = \"is-active\" ]; then exit 3; fi\n"
         "if [ \"$1\" = \"show\" ]; then printf 'loaded\\n'; exit 0; fi\n"
         "exit 2\n",
-        TRUSTPROBE_SERVICE_STATE_INACTIVE
+        BYTHOS_SERVICE_STATE_INACTIVE
     );
     assert_service_probe_with_script(
         "service_probe_missing",
@@ -155,13 +155,13 @@ int main(void) {
         "if [ \"$1\" = \"is-active\" ]; then exit 3; fi\n"
         "if [ \"$1\" = \"show\" ]; then printf 'not-found\\n'; exit 0; fi\n"
         "exit 2\n",
-        TRUSTPROBE_SERVICE_STATE_MISSING
+        BYTHOS_SERVICE_STATE_MISSING
     );
     assert_service_probe_with_script(
         "service_probe_unknown",
         "#!/bin/sh\n"
         "kill -9 $$\n",
-        TRUSTPROBE_SERVICE_STATE_UNKNOWN
+        BYTHOS_SERVICE_STATE_UNKNOWN
     );
 
     printf("runtime capture ok\n");

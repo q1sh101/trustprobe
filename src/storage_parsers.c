@@ -5,12 +5,12 @@
 
 #include "storage_parsers.h"
 
-void trustprobe_parse_lsblk_posture(const char *text, trustprobe_lsblk_posture_t *posture) {
+void bythos_parse_lsblk_posture(const char *text, bythos_lsblk_posture_t *posture) {
     if (posture == NULL) {
         return;
     }
 
-    *posture = (trustprobe_lsblk_posture_t){0};
+    *posture = (bythos_lsblk_posture_t){0};
 
     if (text == NULL || *text == '\0') {
         return;
@@ -61,7 +61,7 @@ void trustprobe_parse_lsblk_posture(const char *text, trustprobe_lsblk_posture_t
     }
 }
 
-bool trustprobe_parse_luks_pcr_mask(const char *text, uint32_t *mask_out) {
+bool bythos_parse_luks_pcr_mask(const char *text, uint32_t *mask_out) {
     if (text == NULL || mask_out == NULL) return false;
     *mask_out = 0;
 

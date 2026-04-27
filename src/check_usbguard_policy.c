@@ -12,18 +12,18 @@ typedef struct {
     const char *name;
 } policy_expectation_t;
 
-size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_results) {
+size_t bythos_check_usbguard_policy(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used < max_results) {
         char val[16] = {0};
-        if (!trustprobe_read_file_text(
+        if (!bythos_read_file_text(
                 "/sys/module/usbcore/parameters/authorized_default",
                 val, sizeof(val))) {
             results[used++] = make_result("usbcore authorized default", CHECK_SKIP,
                 "parameter not readable");
         } else {
-            char *trimmed = trustprobe_trim(val);
+            char *trimmed = bythos_trim(val);
             if (strcmp(trimmed, "0") == 0) {
                 results[used++] = make_result("usbcore authorized default", CHECK_OK,
                     "USB devices denied by default until authorized");
@@ -72,7 +72,7 @@ size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_resu
 
     for (size_t i = 0; i < sizeof(expectations) / sizeof(expectations[0]) && used < max_results; i++) {
         char value[128] = {0};
-        if (!trustprobe_read_key_value(path, expectations[i].key, value, sizeof(value))) {
+        if (!bythos_read_key_value(path, expectations[i].key, value, sizeof(value))) {
             results[used++] = make_result(expectations[i].name, CHECK_FAIL, "key not found");
             continue;
         }

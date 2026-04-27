@@ -18,7 +18,7 @@
 #define EFI_BOOT_ENTRY_FMT  "/sys/firmware/efi/efivars/Boot%04X-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 #define EFI_BOOT_NEXT_PATH  "/sys/firmware/efi/efivars/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
-static bool read_boot_entry(uint16_t number, trustprobe_efi_boot_entry_t *entry) {
+static bool read_boot_entry(uint16_t number, bythos_efi_boot_entry_t *entry) {
     char path[PATH_MAX];
     if (snprintf(path, sizeof(path), EFI_BOOT_ENTRY_FMT, number) >= (int)sizeof(path)) {
         return false;
@@ -26,11 +26,11 @@ static bool read_boot_entry(uint16_t number, trustprobe_efi_boot_entry_t *entry)
 
     unsigned char buf[4096];
     size_t len = 0;
-    if (!trustprobe_read_file_binary(path, buf, sizeof(buf), &len)) {
+    if (!bythos_read_file_binary(path, buf, sizeof(buf), &len)) {
         return false;
     }
 
-    return trustprobe_parse_efi_boot_entry(buf, len, number, entry);
+    return bythos_parse_efi_boot_entry(buf, len, number, entry);
 }
 
 static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
@@ -39,13 +39,13 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
     unsigned char order_buf[256];
     size_t order_len = 0;
 
-    if (!trustprobe_read_file_binary(EFI_BOOT_ORDER_PATH, order_buf,
+    if (!bythos_read_file_binary(EFI_BOOT_ORDER_PATH, order_buf,
                                      sizeof(order_buf), &order_len)) {
         return 0;
     }
 
-    trustprobe_efi_boot_order_t order = {0};
-    if (!trustprobe_parse_efi_boot_order(order_buf, order_len, &order)) {
+    bythos_efi_boot_order_t order = {0};
+    if (!bythos_parse_efi_boot_order(order_buf, order_len, &order)) {
         return 0;
     }
 
@@ -55,7 +55,7 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
     bool cd_in_order = false;
 
     for (size_t i = 0; i < order.order_count; i++) {
-        trustprobe_efi_boot_entry_t entry = {0};
+        bythos_efi_boot_entry_t entry = {0};
         if (!read_boot_entry(order.order[i], &entry)) {
             continue;
         }
@@ -65,13 +65,13 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
         }
 
         switch (entry.type) {
-            case TRUSTPROBE_EFI_BOOT_TYPE_USB:
+            case BYTHOS_EFI_BOOT_TYPE_USB:
                 usb_in_order = true;
                 break;
-            case TRUSTPROBE_EFI_BOOT_TYPE_NETWORK:
+            case BYTHOS_EFI_BOOT_TYPE_NETWORK:
                 net_in_order = true;
                 break;
-            case TRUSTPROBE_EFI_BOOT_TYPE_CD:
+            case BYTHOS_EFI_BOOT_TYPE_CD:
                 cd_in_order = true;
                 break;
             default:
@@ -115,26 +115,26 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
         size_t next_len = 0;
         uint16_t next_number = 0;
 
-        if (!trustprobe_file_exists(EFI_BOOT_NEXT_PATH)) {
+        if (!bythos_file_exists(EFI_BOOT_NEXT_PATH)) {
             results[used++] = make_result("EFI one-shot boot",
                 CHECK_OK, "no boot override pending");
-        } else if (!trustprobe_read_file_binary(EFI_BOOT_NEXT_PATH, next_buf,
+        } else if (!bythos_read_file_binary(EFI_BOOT_NEXT_PATH, next_buf,
                                                  sizeof(next_buf), &next_len) ||
-                   !trustprobe_parse_efi_boot_next(next_buf, next_len, &next_number)) {
+                   !bythos_parse_efi_boot_next(next_buf, next_len, &next_number)) {
             results[used++] = make_result("EFI one-shot boot",
                 CHECK_WARN, "BootNext variable present but unreadable");
         } else {
-            trustprobe_efi_boot_entry_t next_entry = {0};
+            bythos_efi_boot_entry_t next_entry = {0};
             if (!read_boot_entry(next_number, &next_entry)) {
                 results[used++] = make_result("EFI one-shot boot",
                     CHECK_WARN, "BootNext points to unreadable entry");
-            } else if (next_entry.type == TRUSTPROBE_EFI_BOOT_TYPE_USB) {
+            } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_USB) {
                 results[used++] = make_result("EFI one-shot boot",
                     CHECK_WARN, "BootNext overrides to USB boot");
-            } else if (next_entry.type == TRUSTPROBE_EFI_BOOT_TYPE_NETWORK) {
+            } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_NETWORK) {
                 results[used++] = make_result("EFI one-shot boot",
                     CHECK_WARN, "BootNext overrides to network boot");
-            } else if (next_entry.type == TRUSTPROBE_EFI_BOOT_TYPE_CD) {
+            } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_CD) {
                 results[used++] = make_result("EFI one-shot boot",
                     CHECK_WARN, "BootNext overrides to CD/DVD boot");
             } else {
@@ -211,7 +211,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
                 continue;
             }
 
-            if (trustprobe_read_file_text(val_path, value, sizeof(value))) {
+            if (bythos_read_file_text(val_path, value, sizeof(value))) {
                 size_t vlen = strlen(value);
                 while (vlen > 0 && isspace((unsigned char)value[vlen - 1])) {
                     value[--vlen] = '\0';
@@ -250,7 +250,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     } else if (strstr(lower_value, "enable") != NULL) {
         results[used++] = make_result("BIOS USB boot", CHECK_WARN, "enabled; consider disabling in BIOS");
     } else {
-        char detail[TRUSTPROBE_DETAIL_MAX];
+        char detail[BYTHOS_DETAIL_MAX];
         snprintf(detail, sizeof(detail), "setting: %s", value);
         results[used++] = make_result("BIOS USB boot", CHECK_WARN, detail);
     }
@@ -265,7 +265,7 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
         return used;
     }
 
-    if (!trustprobe_command_exists("dmidecode")) {
+    if (!bythos_command_exists("dmidecode")) {
         results[used++] = make_result("Firmware password", CHECK_SKIP,
             "dmidecode not available");
         return used;
@@ -275,7 +275,7 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
     char buf[2048] = {0};
     int exit_status = -1;
 
-    bool captured = trustprobe_capture_argv_status(dmidecode_argv, buf, sizeof(buf), &exit_status);
+    bool captured = bythos_capture_argv_status(dmidecode_argv, buf, sizeof(buf), &exit_status);
     if (!captured || exit_status != 0) {
         if (!captured ||
             strstr(buf, "Permission denied") != NULL ||
@@ -321,7 +321,7 @@ static size_t check_efivars_immutable(check_result_t *results, size_t max_result
     size_t used = 0;
     if (used >= max_results) return used;
 
-    if (!trustprobe_file_exists(EFI_BOOT_ORDER_PATH)) {
+    if (!bythos_file_exists(EFI_BOOT_ORDER_PATH)) {
         results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
             "BootOrder variable not found");
         return used;
@@ -354,7 +354,7 @@ static size_t check_efivars_immutable(check_result_t *results, size_t max_result
     return used;
 }
 
-size_t trustprobe_check_bios_boot(check_result_t *results, size_t max_results) {
+size_t bythos_check_bios_boot(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     used += check_efivars_boot(results + used, used < max_results ? max_results - used : 0);

@@ -1,5 +1,5 @@
-#ifndef TRUSTPROBE_OUTPUT_H
-#define TRUSTPROBE_OUTPUT_H
+#ifndef BYTHOS_OUTPUT_H
+#define BYTHOS_OUTPUT_H
 
 #include <stddef.h>
 
@@ -10,9 +10,9 @@ typedef struct {
     const check_subgroup_t *subgroups;
     size_t subgroup_count;
     const posture_summary_t *summary;
-} trustprobe_group_view_t;
+} bythos_group_view_t;
 
-static inline void trustprobe_summary_merge(posture_summary_t *dst,
+static inline void bythos_summary_merge(posture_summary_t *dst,
                                         const posture_summary_t *src) {
     dst->ok_count += src->ok_count;
     dst->warn_count += src->warn_count;
@@ -21,19 +21,19 @@ static inline void trustprobe_summary_merge(posture_summary_t *dst,
 }
 
 typedef enum {
-    TRUSTPROBE_RENDER_PLAIN = 0,
-    TRUSTPROBE_RENDER_JSON = 1,
-} trustprobe_render_mode_t;
+    BYTHOS_RENDER_PLAIN = 0,
+    BYTHOS_RENDER_JSON = 1,
+} bythos_render_mode_t;
 
-void trustprobe_summary_add(posture_summary_t *summary, const check_result_t *result);
-check_state_t trustprobe_summary_state(const posture_summary_t *summary);
-const char *trustprobe_state_name(check_state_t state);
+void bythos_summary_add(posture_summary_t *summary, const check_result_t *result);
+check_state_t bythos_summary_state(const posture_summary_t *summary);
+const char *bythos_state_name(check_state_t state);
 
-void trustprobe_render(
-    trustprobe_render_mode_t mode,
+void bythos_render(
+    bythos_render_mode_t mode,
     const char *mode_str,
     const char *banner,
-    const trustprobe_group_view_t *groups,
+    const bythos_group_view_t *groups,
     size_t group_count,
     const posture_summary_t *overall,
     int exit_code

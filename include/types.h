@@ -1,11 +1,11 @@
-#ifndef TRUSTPROBE_TYPES_H
-#define TRUSTPROBE_TYPES_H
+#ifndef BYTHOS_TYPES_H
+#define BYTHOS_TYPES_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 
-#define TRUSTPROBE_DETAIL_MAX 256
+#define BYTHOS_DETAIL_MAX 256
 
 typedef enum {
     CHECK_OK = 0,
@@ -17,7 +17,7 @@ typedef enum {
 typedef struct {
     const char *name;
     check_state_t state;
-    char detail[TRUSTPROBE_DETAIL_MAX];
+    char detail[BYTHOS_DETAIL_MAX];
     bool requires_root;
 } check_result_t;
 
@@ -28,11 +28,11 @@ typedef struct {
     size_t skip_count;
 } posture_summary_t;
 
-#define TRUSTPROBE_MAX_SUBGROUP_RESULTS 32
+#define BYTHOS_MAX_SUBGROUP_RESULTS 32
 
 typedef struct {
     const char *name;
-    check_result_t results[TRUSTPROBE_MAX_SUBGROUP_RESULTS];
+    check_result_t results[BYTHOS_MAX_SUBGROUP_RESULTS];
     size_t result_count;
     posture_summary_t summary;
 } check_subgroup_t;
@@ -56,7 +56,7 @@ static inline check_result_t make_root_result(const char *name, check_state_t st
     return result;
 }
 
-static inline const char *trustprobe_pl(size_t n, const char *singular, const char *plural) {
+static inline const char *bythos_pl(size_t n, const char *singular, const char *plural) {
     return n == 1 ? singular : plural;
 }
 

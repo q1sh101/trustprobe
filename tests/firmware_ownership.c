@@ -11,9 +11,9 @@
 
 static void with_mock_mokutil(
     const char *script,
-    void (*check)(trustprobe_mok_ownership_t *ownership)
+    void (*check)(bythos_mok_ownership_t *ownership)
 ) {
-    char template[] = "./tmp-trustprobe-mokutil-XXXXXX";
+    char template[] = "./tmp-bythos-mokutil-XXXXXX";
     char script_path[PATH_MAX];
     char *dir = mkdtemp(template);
     if (dir == NULL) {
@@ -37,8 +37,8 @@ static void with_mock_mokutil(
         exit(1);
     }
 
-    trustprobe_mok_ownership_t ownership = {0};
-    assert_true("probe_mok_ownership", trustprobe_probe_mok_ownership(&ownership));
+    bythos_mok_ownership_t ownership = {0};
+    assert_true("probe_mok_ownership", bythos_probe_mok_ownership(&ownership));
     check(&ownership);
 
     restore_path(saved_path);
@@ -46,7 +46,7 @@ static void with_mock_mokutil(
     rmdir(dir);
 }
 
-static void assert_unavailable(trustprobe_mok_ownership_t *ownership) {
+static void assert_unavailable(bythos_mok_ownership_t *ownership) {
     assert_false("ownership_available_false", ownership->available);
     assert_false("ownership_owner_readable_false", ownership->owner_readable);
     assert_false("ownership_owner_parsed_false", ownership->owner_parsed);
@@ -54,7 +54,7 @@ static void assert_unavailable(trustprobe_mok_ownership_t *ownership) {
     assert_eq_sz("ownership_enrollment_count_zero", ownership->enrollment_count, 0);
 }
 
-static void assert_success(trustprobe_mok_ownership_t *ownership) {
+static void assert_success(bythos_mok_ownership_t *ownership) {
     assert_true("ownership_available_true", ownership->available);
     assert_true("ownership_owner_readable_true", ownership->owner_readable);
     assert_true("ownership_owner_parsed_true", ownership->owner_parsed);
@@ -63,7 +63,7 @@ static void assert_success(trustprobe_mok_ownership_t *ownership) {
     assert_eq_sz("ownership_enrollment_count_two", ownership->enrollment_count, 2);
 }
 
-static void assert_partial(trustprobe_mok_ownership_t *ownership) {
+static void assert_partial(bythos_mok_ownership_t *ownership) {
     assert_true("ownership_partial_available_true", ownership->available);
     assert_true("ownership_partial_owner_readable_true", ownership->owner_readable);
     assert_false("ownership_partial_owner_parsed_false", ownership->owner_parsed);
@@ -72,10 +72,10 @@ static void assert_partial(trustprobe_mok_ownership_t *ownership) {
 }
 
 int main(void) {
-    trustprobe_mok_ownership_t ownership = {0};
+    bythos_mok_ownership_t ownership = {0};
 
     {
-        char template[] = "./tmp-trustprobe-mokutil-empty-XXXXXX";
+        char template[] = "./tmp-bythos-mokutil-empty-XXXXXX";
         char *dir = mkdtemp(template);
         if (dir == NULL) {
             fprintf(stderr, "firmware ownership failure: could not create empty PATH temp dir\n");
@@ -95,7 +95,7 @@ int main(void) {
             return 1;
         }
 
-        assert_true("probe_mok_ownership_unavailable", trustprobe_probe_mok_ownership(&ownership));
+        assert_true("probe_mok_ownership_unavailable", bythos_probe_mok_ownership(&ownership));
         assert_unavailable(&ownership);
 
         restore_path(saved_path);

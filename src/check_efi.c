@@ -4,11 +4,11 @@
 #include "checks.h"
 #include "runtime.h"
 
-size_t trustprobe_check_efi(check_result_t *results, size_t max_results) {
+size_t bythos_check_efi(check_result_t *results, size_t max_results) {
     size_t used = 0;
     const char *efi_path = "/sys/firmware/efi";
 
-    bool efi_visible = trustprobe_file_exists(efi_path);
+    bool efi_visible = bythos_file_exists(efi_path);
 
     if (used < max_results) {
         if (efi_visible) {
@@ -24,15 +24,15 @@ size_t trustprobe_check_efi(check_result_t *results, size_t max_results) {
                 "EFI runtime not visible");
         } else {
             size_t count = 0;
-            bool readable = trustprobe_count_child_dirs(
+            bool readable = bythos_count_child_dirs(
                 "/sys/firmware/efi/esrt/entries", &count);
             if (!readable || count == 0) {
                 results[used++] = make_result("ESRT entries", CHECK_WARN,
                     "no ESRT entries; fwupd cannot update firmware");
             } else {
-                char detail[TRUSTPROBE_DETAIL_MAX];
+                char detail[BYTHOS_DETAIL_MAX];
                 snprintf(detail, sizeof(detail), "%zu firmware %s",
-                    count, trustprobe_pl(count, "entry", "entries"));
+                    count, bythos_pl(count, "entry", "entries"));
                 results[used++] = make_result("ESRT entries", CHECK_OK, detail);
             }
         }

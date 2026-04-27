@@ -14,7 +14,7 @@ static const char *const SERIAL_GETTY_UNITS[] = {
 
 static bool cmdline_has_serial_console(void) {
     char buf[4096] = {0};
-    if (!trustprobe_read_file_text("/proc/cmdline", buf, sizeof(buf))) {
+    if (!bythos_read_file_text("/proc/cmdline", buf, sizeof(buf))) {
         return false;
     }
     return strstr(buf, "console=ttyS")   != NULL ||
@@ -22,7 +22,7 @@ static bool cmdline_has_serial_console(void) {
            strstr(buf, "console=ttyUSB") != NULL;
 }
 
-size_t trustprobe_check_serial_console(check_result_t *results, size_t max_results) {
+size_t bythos_check_serial_console(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used < max_results) {
@@ -39,14 +39,14 @@ size_t trustprobe_check_serial_console(check_result_t *results, size_t max_resul
         bool systemctl_unavailable = false;
 
         for (size_t i = 0; SERIAL_GETTY_UNITS[i] != NULL; i++) {
-            switch (trustprobe_probe_systemd_service(SERIAL_GETTY_UNITS[i])) {
-            case TRUSTPROBE_SERVICE_STATE_ACTIVE:
+            switch (bythos_probe_systemd_service(SERIAL_GETTY_UNITS[i])) {
+            case BYTHOS_SERVICE_STATE_ACTIVE:
                 active_unit = SERIAL_GETTY_UNITS[i];
                 break;
-            case TRUSTPROBE_SERVICE_STATE_INACTIVE:
+            case BYTHOS_SERVICE_STATE_INACTIVE:
                 any_present = true;
                 break;
-            case TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+            case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
                 systemctl_unavailable = true;
                 break;
             default:
@@ -60,7 +60,7 @@ size_t trustprobe_check_serial_console(check_result_t *results, size_t max_resul
         if (systemctl_unavailable && !any_present && active_unit == NULL) {
             results[used++] = make_result("serial getty service", CHECK_SKIP, "systemctl not available");
         } else if (active_unit != NULL) {
-            char detail[TRUSTPROBE_DETAIL_MAX];
+            char detail[BYTHOS_DETAIL_MAX];
             snprintf(detail, sizeof(detail), "%s is active", active_unit);
             results[used++] = make_result("serial getty service", CHECK_WARN, detail);
         } else if (any_present) {

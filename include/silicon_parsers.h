@@ -1,5 +1,5 @@
-#ifndef TRUSTPROBE_SILICON_PARSERS_H
-#define TRUSTPROBE_SILICON_PARSERS_H
+#ifndef BYTHOS_SILICON_PARSERS_H
+#define BYTHOS_SILICON_PARSERS_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -11,18 +11,18 @@ typedef struct {
     bool passthrough_off;
     bool strict_on;
     bool strict_off;
-} trustprobe_iommu_cmdline_t;
+} bythos_iommu_cmdline_t;
 
 typedef enum {
-    TRUSTPROBE_CPU_VENDOR_UNKNOWN = 0,
-    TRUSTPROBE_CPU_VENDOR_AMD,
-    TRUSTPROBE_CPU_VENDOR_INTEL,
-} trustprobe_cpu_vendor_t;
+    BYTHOS_CPU_VENDOR_UNKNOWN = 0,
+    BYTHOS_CPU_VENDOR_AMD,
+    BYTHOS_CPU_VENDOR_INTEL,
+} bythos_cpu_vendor_t;
 
-void trustprobe_parse_iommu_cmdline(const char *text, trustprobe_iommu_cmdline_t *cmdline);
-bool trustprobe_extract_microcode_revision(const char *text, char *buffer, size_t size);
-trustprobe_cpu_vendor_t trustprobe_cpu_vendor(void);
+void bythos_parse_iommu_cmdline(const char *text, bythos_iommu_cmdline_t *cmdline);
+bool bythos_extract_microcode_revision(const char *text, char *buffer, size_t size);
+bythos_cpu_vendor_t bythos_cpu_vendor(void);
 /* returns: 1 = all zeros, 0 = non-zero, -1 = not found */
-int trustprobe_pcr_zero_check(const char *buf, unsigned int pcr_num);
+int bythos_pcr_zero_check(const char *buf, unsigned int pcr_num);
 
 #endif

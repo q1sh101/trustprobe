@@ -7,23 +7,23 @@
 
 #define ME_FW_VERSION_PATH "/sys/class/mei/mei0/fw_version"
 
-size_t trustprobe_check_me_version(check_result_t *results, size_t max_results) {
+size_t bythos_check_me_version(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used >= max_results) return used;
 
-    if (trustprobe_cpu_vendor() != TRUSTPROBE_CPU_VENDOR_INTEL) {
+    if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
         return used;
     }
 
-    if (!trustprobe_file_exists(ME_FW_VERSION_PATH)) {
+    if (!bythos_file_exists(ME_FW_VERSION_PATH)) {
         results[used++] = make_result("Intel ME version", CHECK_SKIP,
             "Intel ME not present");
         return used;
     }
 
     char buf[64] = {0};
-    if (!trustprobe_read_file_text(ME_FW_VERSION_PATH, buf, sizeof(buf))) {
+    if (!bythos_read_file_text(ME_FW_VERSION_PATH, buf, sizeof(buf))) {
         results[used++] = make_result("Intel ME version", CHECK_SKIP,
             "version unreadable");
         return used;
@@ -42,7 +42,7 @@ size_t trustprobe_check_me_version(check_result_t *results, size_t max_results) 
         return used;
     }
 
-    char detail[TRUSTPROBE_DETAIL_MAX];
+    char detail[BYTHOS_DETAIL_MAX];
     snprintf(detail, sizeof(detail), "%s; compare against Intel SA advisories", buf);
     results[used++] = make_result("Intel ME version", CHECK_OK, detail);
 

@@ -15,7 +15,7 @@
 
 #include "runtime.h"
 
-char *trustprobe_trim(char *text) {
+char *bythos_trim(char *text) {
     if (text == NULL) {
         return NULL;
     }
@@ -76,7 +76,7 @@ static char *strip_matching_quotes(char *text) {
     return text;
 }
 
-bool trustprobe_command_exists(const char *name) {
+bool bythos_command_exists(const char *name) {
     if (name == NULL || *name == '\0') {
         return false;
     }
@@ -108,7 +108,7 @@ bool trustprobe_command_exists(const char *name) {
     return found;
 }
 
-bool trustprobe_file_exists(const char *path) {
+bool bythos_file_exists(const char *path) {
     if (path == NULL) {
         return false;
     }
@@ -117,7 +117,7 @@ bool trustprobe_file_exists(const char *path) {
     return stat(path, &st) == 0;
 }
 
-bool trustprobe_read_file_text(const char *path, char *buffer, size_t size) {
+bool bythos_read_file_text(const char *path, char *buffer, size_t size) {
     if (path == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -138,7 +138,7 @@ bool trustprobe_read_file_text(const char *path, char *buffer, size_t size) {
     return true;
 }
 
-bool trustprobe_read_file_binary(const char *path, unsigned char *buffer, size_t size, size_t *bytes_read) {
+bool bythos_read_file_binary(const char *path, unsigned char *buffer, size_t size, size_t *bytes_read) {
     if (path == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -161,7 +161,7 @@ bool trustprobe_read_file_binary(const char *path, unsigned char *buffer, size_t
     return true;
 }
 
-bool trustprobe_count_child_dirs(const char *path, size_t *count) {
+bool bythos_count_child_dirs(const char *path, size_t *count) {
     if (path == NULL) {
         return false;
     }
@@ -198,7 +198,7 @@ bool trustprobe_count_child_dirs(const char *path, size_t *count) {
     return true;
 }
 
-bool trustprobe_read_key_value(const char *path, const char *key, char *buffer, size_t size) {
+bool bythos_read_key_value(const char *path, const char *key, char *buffer, size_t size) {
     if (path == NULL || key == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -211,7 +211,7 @@ bool trustprobe_read_key_value(const char *path, const char *key, char *buffer, 
     char line[1024];
     bool found = false;
     while (fgets(line, sizeof(line), file) != NULL) {
-        char *text = trustprobe_trim(line);
+        char *text = bythos_trim(line);
         if (*text == '\0' || *text == '#') {
             continue;
         }
@@ -222,10 +222,10 @@ bool trustprobe_read_key_value(const char *path, const char *key, char *buffer, 
         }
 
         *sep = '\0';
-        char *lhs = trustprobe_trim(text);
-        char *rhs = trustprobe_trim(sep + 1);
+        char *lhs = bythos_trim(text);
+        char *rhs = bythos_trim(sep + 1);
         strip_inline_comment(rhs);
-        rhs = trustprobe_trim(rhs);
+        rhs = bythos_trim(rhs);
         rhs = strip_matching_quotes(rhs);
         if (strcmp(lhs, key) != 0) {
             continue;
@@ -240,7 +240,7 @@ bool trustprobe_read_key_value(const char *path, const char *key, char *buffer, 
     return found;
 }
 
-bool trustprobe_capture_argv_status(const char *const argv[], char *buffer, size_t size, int *exit_status) {
+bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t size, int *exit_status) {
     if (argv == NULL || argv[0] == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -310,7 +310,7 @@ bool trustprobe_capture_argv_status(const char *const argv[], char *buffer, size
     return true;
 }
 
-int trustprobe_run_argv_quiet(const char *const argv[]) {
+int bythos_run_argv_quiet(const char *const argv[]) {
     if (argv == NULL || argv[0] == NULL) {
         return -1;
     }
@@ -351,23 +351,23 @@ int trustprobe_run_argv_quiet(const char *const argv[]) {
     return WEXITSTATUS(status);
 }
 
-trustprobe_service_state_t trustprobe_probe_systemd_service(const char *unit) {
+bythos_service_state_t bythos_probe_systemd_service(const char *unit) {
     if (unit == NULL || *unit == '\0') {
-        return TRUSTPROBE_SERVICE_STATE_UNKNOWN;
+        return BYTHOS_SERVICE_STATE_UNKNOWN;
     }
 
-    if (!trustprobe_command_exists("systemctl")) {
-        return TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE;
+    if (!bythos_command_exists("systemctl")) {
+        return BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE;
     }
 
     const char *active_argv[] = {"systemctl", "is-active", "--quiet", unit, NULL};
 
-    int active = trustprobe_run_argv_quiet(active_argv);
+    int active = bythos_run_argv_quiet(active_argv);
     if (active == 0) {
-        return TRUSTPROBE_SERVICE_STATE_ACTIVE;
+        return BYTHOS_SERVICE_STATE_ACTIVE;
     }
     if (active < 0) {
-        return TRUSTPROBE_SERVICE_STATE_UNKNOWN;
+        return BYTHOS_SERVICE_STATE_UNKNOWN;
     }
 
     /* systemctl show exposes LoadState; pattern exit codes do not distinguish missing units. */
@@ -375,14 +375,14 @@ trustprobe_service_state_t trustprobe_probe_systemd_service(const char *unit) {
     char load_buf[64] = {0};
     int show_exit = -1;
 
-    if (!trustprobe_capture_argv_status(show_argv, load_buf, sizeof(load_buf), &show_exit) || show_exit != 0) {
-        return TRUSTPROBE_SERVICE_STATE_UNKNOWN;
+    if (!bythos_capture_argv_status(show_argv, load_buf, sizeof(load_buf), &show_exit) || show_exit != 0) {
+        return BYTHOS_SERVICE_STATE_UNKNOWN;
     }
 
-    char *load_state = trustprobe_trim(load_buf);
+    char *load_state = bythos_trim(load_buf);
     if (strcmp(load_state, "not-found") == 0) {
-        return TRUSTPROBE_SERVICE_STATE_MISSING;
+        return BYTHOS_SERVICE_STATE_MISSING;
     }
 
-    return TRUSTPROBE_SERVICE_STATE_INACTIVE;
+    return BYTHOS_SERVICE_STATE_INACTIVE;
 }

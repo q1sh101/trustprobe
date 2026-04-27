@@ -22,7 +22,7 @@ static bool read_tb_domain_attr(const char *attr, char *buffer, size_t size) {
         if (snprintf(path, sizeof(path), "%s/%s/%s",
                      BOLT_SYSFS_BASE, entry->d_name, attr) >= (int)sizeof(path)) continue;
 
-        if (trustprobe_read_file_text(path, buffer, size)) {
+        if (bythos_read_file_text(path, buffer, size)) {
             closedir(dir);
             return true;
         }
@@ -50,11 +50,11 @@ static bool read_thunderbolt_security_level(char *buffer, size_t size,
         if (snprintf(path, sizeof(path), "%s/%s/security",
                      BOLT_SYSFS_BASE, entry->d_name) >= (int)sizeof(path)) continue;
 
-        if (!trustprobe_file_exists(path)) continue;
+        if (!bythos_file_exists(path)) continue;
 
         if (controller_visible != NULL) *controller_visible = true;
 
-        if (trustprobe_read_file_text(path, buffer, size)) {
+        if (bythos_read_file_text(path, buffer, size)) {
             closedir(dir);
             return true;
         }
@@ -65,21 +65,21 @@ static bool read_thunderbolt_security_level(char *buffer, size_t size,
     return false;
 }
 
-size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
+size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used < max_results) {
-        switch (trustprobe_probe_systemd_service("bolt.service")) {
-        case TRUSTPROBE_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        switch (bythos_probe_systemd_service("bolt.service")) {
+        case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
             results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "systemctl not available");
             break;
-        case TRUSTPROBE_SERVICE_STATE_ACTIVE:
+        case BYTHOS_SERVICE_STATE_ACTIVE:
             results[used++] = make_result("Thunderbolt policy service", CHECK_OK, "running");
             break;
-        case TRUSTPROBE_SERVICE_STATE_INACTIVE:
+        case BYTHOS_SERVICE_STATE_INACTIVE:
             results[used++] = make_result("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
             break;
-        case TRUSTPROBE_SERVICE_STATE_MISSING:
+        case BYTHOS_SERVICE_STATE_MISSING:
             results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "not installed");
             break;
         default:
@@ -103,7 +103,7 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
                     "Thunderbolt controller visible but security level unreadable");
             }
         } else {
-            char *trimmed = trustprobe_trim(level);
+            char *trimmed = bythos_trim(level);
 
             if (strcmp(trimmed, "secure") == 0 || strcmp(trimmed, "dponly") == 0) {
                 results[used++] = make_result("Thunderbolt security level", CHECK_OK, trimmed);
@@ -114,7 +114,7 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
                 results[used++] = make_result("Thunderbolt security level", CHECK_WARN,
                     "none (all devices trusted)");
             } else {
-                char detail[TRUSTPROBE_DETAIL_MAX];
+                char detail[BYTHOS_DETAIL_MAX];
                 snprintf(detail, sizeof(detail), "%s (unknown level)", trimmed);
                 results[used++] = make_result("Thunderbolt security level", CHECK_WARN, detail);
             }
@@ -127,15 +127,15 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
         char buffer[4096] = {0};
         int exit_status = -1;
 
-        if (!trustprobe_command_exists("boltctl")) {
+        if (!bythos_command_exists("boltctl")) {
             results[used++] = make_result("Thunderbolt devices (optional)", CHECK_SKIP,
                 "boltctl not installed");
-        } else if (!trustprobe_capture_argv_status(boltctl_list_argv, buffer, sizeof(buffer), &exit_status) ||
+        } else if (!bythos_capture_argv_status(boltctl_list_argv, buffer, sizeof(buffer), &exit_status) ||
             exit_status != 0) {
             results[used++] = make_result("Thunderbolt devices (optional)", CHECK_SKIP,
                 "unable to list Thunderbolt devices");
         } else {
-            char *trimmed = trustprobe_trim(buffer);
+            char *trimmed = bythos_trim(buffer);
             if (*trimmed == '\0') {
                 results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
                     "none visible");
@@ -152,7 +152,7 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             results[used++] = make_result("Thunderbolt DMA protection", CHECK_SKIP,
                 "iommu_dma_protection not available");
         } else {
-            char *v = trustprobe_trim(val);
+            char *v = bythos_trim(val);
             if (strcmp(v, "1") == 0) {
                 results[used++] = make_result("Thunderbolt DMA protection", CHECK_OK,
                     "pre-boot DMA active");

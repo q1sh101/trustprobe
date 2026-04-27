@@ -10,16 +10,16 @@
 #define INTEL_PCH_CONFIG "/sys/bus/pci/devices/0000:00:1f.0/config"
 #define BIOS_CNTL_OFFSET ((off_t)0xDC)
 
-size_t trustprobe_check_bios_cntl(check_result_t *results, size_t max_results) {
+size_t bythos_check_bios_cntl(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
     if (used >= max_results) return used;
 
-    if (trustprobe_cpu_vendor() != TRUSTPROBE_CPU_VENDOR_INTEL) {
+    if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
         return used;
     }
 
-    if (!trustprobe_file_exists(INTEL_PCH_CONFIG)) {
+    if (!bythos_file_exists(INTEL_PCH_CONFIG)) {
         results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "Intel PCH not found");
         return used;
     }

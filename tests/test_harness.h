@@ -1,5 +1,5 @@
-#ifndef TRUSTPROBE_TEST_HARNESS_H
-#define TRUSTPROBE_TEST_HARNESS_H
+#ifndef BYTHOS_TEST_HARNESS_H
+#define BYTHOS_TEST_HARNESS_H
 
 #include <stdio.h>
 #include <stdlib.h>

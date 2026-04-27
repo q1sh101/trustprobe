@@ -13,7 +13,7 @@ static bool name_lower_eq(const char *a, const char *b) {
     return *a == '\0' && *b == '\0';
 }
 
-bool trustprobe_esp_is_known_vendor(const char *name) {
+bool bythos_esp_is_known_vendor(const char *name) {
     if (name == NULL) return false;
     static const char *const known[] = {
         "boot", "microsoft",
@@ -29,7 +29,7 @@ bool trustprobe_esp_is_known_vendor(const char *name) {
     return false;
 }
 
-bool trustprobe_parse_sha256sum_line(const char *line, char *hash_out, size_t size) {
+bool bythos_parse_sha256sum_line(const char *line, char *hash_out, size_t size) {
     if (line == NULL || hash_out == NULL || size == 0) return false;
     /* sha256sum output: "64-char-hex  filename\n" */
     const char *p = line;

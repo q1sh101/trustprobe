@@ -28,7 +28,7 @@ static void check_sigdb_variable(const char *path, const char *name,
         return;
     }
 
-    if (!trustprobe_file_exists(path)) {
+    if (!bythos_file_exists(path)) {
         results[(*used)++] = make_result(name, CHECK_WARN,
             "UEFI visible but variable missing");
         return;
@@ -37,45 +37,45 @@ static void check_sigdb_variable(const char *path, const char *name,
     /* db/dbx presence matters; sample only enough to classify empty vs non-empty. */
     unsigned char buf[32];
     size_t len = 0;
-    if (!trustprobe_read_file_binary(path, buf, sizeof(buf), &len)) {
+    if (!bythos_read_file_binary(path, buf, sizeof(buf), &len)) {
         results[(*used)++] = make_result(name, CHECK_WARN, "variable unreadable");
         return;
     }
 
-    trustprobe_efi_sigdb_status_t status = trustprobe_classify_efi_sigdb(buf, len);
-    if (status == TRUSTPROBE_EFI_SIGDB_NONEMPTY) {
+    bythos_efi_sigdb_status_t status = bythos_classify_efi_sigdb(buf, len);
+    if (status == BYTHOS_EFI_SIGDB_NONEMPTY) {
         results[(*used)++] = make_result(name, CHECK_OK, "visible and non-empty");
     } else {
         results[(*used)++] = make_result(name, CHECK_WARN, "visible but empty");
     }
 }
 
-size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) {
+size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     size_t used = 0;
     bool has_mokutil = false;
     static const char *mokutil_state_argv[] = {"mokutil", "--sb-state", NULL};
     char state_buffer[512] = {0};
     bool have_state_output = false;
-    trustprobe_mok_ownership_t ownership = {0};
-    trustprobe_secure_boot_status_t state = TRUSTPROBE_SECURE_BOOT_UNKNOWN;
+    bythos_mok_ownership_t ownership = {0};
+    bythos_secure_boot_status_t state = BYTHOS_SECURE_BOOT_UNKNOWN;
 
-    has_mokutil = trustprobe_command_exists("mokutil");
+    has_mokutil = bythos_command_exists("mokutil");
 
     if (has_mokutil) {
-        trustprobe_probe_mok_ownership(&ownership);
+        bythos_probe_mok_ownership(&ownership);
     }
 
     int sb_exit = -1;
     if (used < max_results) {
         if (!has_mokutil) {
             results[used++] = make_result("secure boot state", CHECK_SKIP, "mokutil not installed");
-        } else if (!trustprobe_capture_argv_status(mokutil_state_argv, state_buffer, sizeof(state_buffer), &sb_exit) || sb_exit != 0) {
+        } else if (!bythos_capture_argv_status(mokutil_state_argv, state_buffer, sizeof(state_buffer), &sb_exit) || sb_exit != 0) {
             results[used++] = make_result("secure boot state", CHECK_WARN, "unable to query");
         /* Disabled Secure Boot is a direct posture regression for this layer, so keep it as FAIL. */
-        } else if ((state = trustprobe_parse_secure_boot_state(state_buffer)) == TRUSTPROBE_SECURE_BOOT_ENABLED) {
+        } else if ((state = bythos_parse_secure_boot_state(state_buffer)) == BYTHOS_SECURE_BOOT_ENABLED) {
             have_state_output = true;
             results[used++] = make_result("secure boot state", CHECK_OK, "Secure Boot enabled");
-        } else if (state == TRUSTPROBE_SECURE_BOOT_DISABLED) {
+        } else if (state == BYTHOS_SECURE_BOOT_DISABLED) {
             have_state_output = true;
             results[used++] = make_result("secure boot state", CHECK_FAIL, "Secure Boot disabled");
         } else {
@@ -89,7 +89,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
             results[used++] = make_result("secure boot setup mode", CHECK_SKIP, "mokutil not installed");
         } else if (!have_state_output) {
             results[used++] = make_result("secure boot setup mode", CHECK_SKIP, "unavailable");
-        } else if (trustprobe_secure_boot_setup_mode(state_buffer)) {
+        } else if (bythos_secure_boot_setup_mode(state_buffer)) {
             results[used++] = make_result("secure boot setup mode", CHECK_WARN, "enabled");
         } else {
             results[used++] = make_result("secure boot setup mode", CHECK_OK, "disabled");
@@ -125,7 +125,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         }
     }
 
-    bool efi_visible = trustprobe_file_exists("/sys/firmware/efi");
+    bool efi_visible = bythos_file_exists("/sys/firmware/efi");
 
     check_sigdb_variable(EFI_DB_PATH, "secure boot allowlist",
                          efi_visible, results, &used, max_results);
@@ -140,13 +140,13 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         } else {
             unsigned char dbx_buf[8192];
             size_t dbx_len = 0;
-            if (!trustprobe_read_file_binary(EFI_DBX_PATH, dbx_buf, sizeof(dbx_buf), &dbx_len) ||
+            if (!bythos_read_file_binary(EFI_DBX_PATH, dbx_buf, sizeof(dbx_buf), &dbx_len) ||
                 dbx_len <= 4u) {
                 results[used++] = make_result("Secure Boot dbx size", CHECK_SKIP,
                     "dbx not readable");
             } else {
                 size_t payload = dbx_len - 4u;
-                char detail[TRUSTPROBE_DETAIL_MAX];
+                char detail[BYTHOS_DETAIL_MAX];
                 if (payload < 100) {
                     snprintf(detail, sizeof(detail),
                         "minimal (%zu bytes); may be factory default", payload);
@@ -167,19 +167,19 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         } else {
             unsigned char db_buf[8192];
             size_t db_len = 0;
-            if (!trustprobe_read_file_binary(EFI_DB_PATH, db_buf, sizeof(db_buf), &db_len)) {
+            if (!bythos_read_file_binary(EFI_DB_PATH, db_buf, sizeof(db_buf), &db_len)) {
                 results[used++] = make_result("Secure Boot db keys", CHECK_SKIP,
                     "db not readable");
             } else {
-                size_t lists = trustprobe_count_efi_sigdb_lists(db_buf, db_len);
+                size_t lists = bythos_count_efi_sigdb_lists(db_buf, db_len);
                 if (lists == 0) {
                     results[used++] = make_result("Secure Boot db keys", CHECK_WARN,
                         "empty; Secure Boot allowlist missing");
                 } else {
-                    char detail[TRUSTPROBE_DETAIL_MAX];
+                    char detail[BYTHOS_DETAIL_MAX];
                     snprintf(detail, sizeof(detail),
                         "%zu key %s in Secure Boot allowlist",
-                        lists, trustprobe_pl(lists, "list", "lists"));
+                        lists, bythos_pl(lists, "list", "lists"));
                     results[used++] = make_result("Secure Boot db keys", CHECK_OK, detail);
                 }
             }
@@ -190,23 +190,23 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         if (!efi_visible) {
             results[used++] = make_result("SBAT policy level", CHECK_SKIP,
                 "EFI runtime interface not visible");
-        } else if (!trustprobe_file_exists(EFI_SBAT_PATH)) {
+        } else if (!bythos_file_exists(EFI_SBAT_PATH)) {
             results[used++] = make_result("SBAT policy level", CHECK_SKIP,
                 "SbatLevel variable absent; pre-SBAT firmware");
         } else {
             unsigned char sbat_buf[256];
             size_t sbat_len = 0;
-            if (!trustprobe_read_file_binary(EFI_SBAT_PATH, sbat_buf, sizeof(sbat_buf), &sbat_len) ||
+            if (!bythos_read_file_binary(EFI_SBAT_PATH, sbat_buf, sizeof(sbat_buf), &sbat_len) ||
                 sbat_len <= 4u) {
                 results[used++] = make_result("SBAT policy level", CHECK_WARN,
                     "SbatLevel variable unreadable");
             } else {
                 char sbat_line[64] = {0};
-                if (!trustprobe_parse_sbat_level(sbat_buf, sbat_len, sbat_line, sizeof(sbat_line))) {
+                if (!bythos_parse_sbat_level(sbat_buf, sbat_len, sbat_line, sizeof(sbat_line))) {
                     results[used++] = make_result("SBAT policy level", CHECK_WARN,
                         "SbatLevel variable unreadable");
                 } else {
-                    char detail[TRUSTPROBE_DETAIL_MAX];
+                    char detail[BYTHOS_DETAIL_MAX];
                     snprintf(detail, sizeof(detail), "SbatLevel: %s", sbat_line);
                     results[used++] = make_result("SBAT policy level", CHECK_OK, detail);
                 }
@@ -222,11 +222,11 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
             static const char *const db_argv[] = {"mokutil", "--db", NULL};
             char db_buf[32768] = {0};
             int db_exit = -1;
-            if (!trustprobe_capture_argv_status(db_argv, db_buf, sizeof(db_buf), &db_exit) ||
+            if (!bythos_capture_argv_status(db_argv, db_buf, sizeof(db_buf), &db_exit) ||
                 db_exit != 0) {
                 results[used++] = make_result("Secure Boot trust breadth", CHECK_SKIP,
                     "unable to read Secure Boot db");
-            } else if (trustprobe_sb_has_ms_ca(db_buf)) {
+            } else if (bythos_sb_has_ms_ca(db_buf)) {
                 results[used++] = make_result("Secure Boot trust breadth", CHECK_WARN,
                     "Microsoft 3rd Party UEFI CA in db; widens trusted signer set");
             } else {
@@ -238,7 +238,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
 
     if (used < max_results) {
         char mounts_buf[4096] = {0};
-        if (!trustprobe_read_file_text("/proc/mounts", mounts_buf, sizeof(mounts_buf))) {
+        if (!bythos_read_file_text("/proc/mounts", mounts_buf, sizeof(mounts_buf))) {
             results[used++] = make_result("efivarfs mount mode", CHECK_SKIP,
                 "unable to read /proc/mounts");
         } else {

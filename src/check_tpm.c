@@ -7,7 +7,7 @@
 #include "runtime.h"
 #include "silicon_parsers.h"
 
-size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
+size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
     size_t used = 0;
     const char *tpm_class_path = "/sys/class/tpm/tpm0";
     const char *tpm_major_path = "/sys/class/tpm/tpm0/tpm_version_major";
@@ -15,12 +15,12 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
     if (used < max_results) {
         char major[64] = {0};
 
-        if (!trustprobe_file_exists(tpm_class_path)) {
+        if (!bythos_file_exists(tpm_class_path)) {
             results[used++] = make_result("TPM presence", CHECK_WARN, "no TPM device visible");
-        } else if (!trustprobe_read_file_text(tpm_major_path, major, sizeof(major))) {
+        } else if (!bythos_read_file_text(tpm_major_path, major, sizeof(major))) {
             results[used++] = make_result("TPM presence", CHECK_WARN, "TPM device visible but version unreadable");
         } else {
-            char *trimmed = trustprobe_trim(major);
+            char *trimmed = bythos_trim(major);
 
             if (strcmp(trimmed, "2") == 0) {
                 results[used++] = make_result("TPM presence", CHECK_OK, "TPM 2.0 device visible");
@@ -39,13 +39,13 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
         char buf[512] = {0};
         int exit_status = -1;
 
-        if (!trustprobe_command_exists("tpm2_pcrread")) {
+        if (!bythos_command_exists("tpm2_pcrread")) {
             results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "tpm2_pcrread not available");
-        } else if (!trustprobe_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
+        } else if (!bythos_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
             results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "PCR read failed");
         } else {
-            int z = trustprobe_pcr_zero_check(buf, 7);
+            int z = bythos_pcr_zero_check(buf, 7);
             if (z < 0) {
                 results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "not found in output");
             } else if (z == 1) {
@@ -63,13 +63,13 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
         char buf[512] = {0};
         int exit_status = -1;
 
-        if (!trustprobe_command_exists("tpm2_pcrread")) {
+        if (!bythos_command_exists("tpm2_pcrread")) {
             results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "tpm2_pcrread not available");
-        } else if (!trustprobe_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
+        } else if (!bythos_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
             results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "PCR read failed");
         } else {
-            int z = trustprobe_pcr_zero_check(buf, 0);
+            int z = bythos_pcr_zero_check(buf, 0);
             if (z < 0) {
                 results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "not found in output");
             } else if (z == 1) {

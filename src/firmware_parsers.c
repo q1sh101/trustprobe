@@ -42,7 +42,7 @@ static void trim_trailing(char *text) {
     }
 }
 
-size_t trustprobe_count_nonempty_lines(const char *text) {
+size_t bythos_count_nonempty_lines(const char *text) {
     if (text == NULL) {
         return 0;
     }
@@ -71,7 +71,7 @@ size_t trustprobe_count_nonempty_lines(const char *text) {
     return count;
 }
 
-bool trustprobe_extract_short_list_name(const char *text, char *buffer, size_t size) {
+bool bythos_extract_short_list_name(const char *text, char *buffer, size_t size) {
     if (text == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -109,21 +109,21 @@ bool trustprobe_extract_short_list_name(const char *text, char *buffer, size_t s
     return true;
 }
 
-trustprobe_secure_boot_status_t trustprobe_parse_secure_boot_state(const char *text) {
+bythos_secure_boot_status_t bythos_parse_secure_boot_state(const char *text) {
     if (text == NULL) {
-        return TRUSTPROBE_SECURE_BOOT_UNKNOWN;
+        return BYTHOS_SECURE_BOOT_UNKNOWN;
     }
 
     if (strstr(text, SECURE_BOOT_ENABLED_TEXT) != NULL) {
-        return TRUSTPROBE_SECURE_BOOT_ENABLED;
+        return BYTHOS_SECURE_BOOT_ENABLED;
     }
     if (strstr(text, SECURE_BOOT_DISABLED_TEXT) != NULL) {
-        return TRUSTPROBE_SECURE_BOOT_DISABLED;
+        return BYTHOS_SECURE_BOOT_DISABLED;
     }
-    return TRUSTPROBE_SECURE_BOOT_UNKNOWN;
+    return BYTHOS_SECURE_BOOT_UNKNOWN;
 }
 
-bool trustprobe_secure_boot_setup_mode(const char *text) {
+bool bythos_secure_boot_setup_mode(const char *text) {
     if (text == NULL) {
         return false;
     }
@@ -131,21 +131,21 @@ bool trustprobe_secure_boot_setup_mode(const char *text) {
     return strstr(text, SECURE_BOOT_SETUP_MODE_TEXT) != NULL;
 }
 
-trustprobe_fwupd_updates_status_t trustprobe_parse_fwupd_updates(const char *text, int exit_status) {
+bythos_fwupd_updates_status_t bythos_parse_fwupd_updates(const char *text, int exit_status) {
     if (text == NULL) {
-        return TRUSTPROBE_FWUPD_UPDATES_UNKNOWN;
+        return BYTHOS_FWUPD_UPDATES_UNKNOWN;
     }
 
     if (strstr(text, FWUPD_NO_UPDATES_TEXT) != NULL) {
-        return TRUSTPROBE_FWUPD_UPDATES_NONE;
+        return BYTHOS_FWUPD_UPDATES_NONE;
     }
     if (exit_status == 0) {
-        return TRUSTPROBE_FWUPD_UPDATES_AVAILABLE;
+        return BYTHOS_FWUPD_UPDATES_AVAILABLE;
     }
-    return TRUSTPROBE_FWUPD_UPDATES_UNKNOWN;
+    return BYTHOS_FWUPD_UPDATES_UNKNOWN;
 }
 
-bool trustprobe_hsi_find_result(const char *json, const char *appstream_id,
+bool bythos_hsi_find_result(const char *json, const char *appstream_id,
                                 char *result_buf, size_t result_size) {
     if (json == NULL || appstream_id == NULL || result_buf == NULL || result_size == 0) {
         return false;
@@ -216,7 +216,7 @@ bool trustprobe_hsi_find_result(const char *json, const char *appstream_id,
     return false;
 }
 
-bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *status) {
+bool bythos_parse_sbctl_status(const char *text, bythos_sbctl_status_t *status) {
     if (text == NULL || status == NULL) {
         return false;
     }
@@ -284,7 +284,7 @@ bool trustprobe_parse_sbctl_status(const char *text, trustprobe_sbctl_status_t *
     return status->installed_known || status->setup_mode_known || status->secure_boot_known || status->owner_guid_present;
 }
 
-bool trustprobe_parse_sbat_level(const unsigned char *buf, size_t len,
+bool bythos_parse_sbat_level(const unsigned char *buf, size_t len,
                                  char *out, size_t out_size) {
     if (buf == NULL || out == NULL || out_size == 0 || len <= 4u) return false;
     const char *payload = (const char *)(buf + 4);
@@ -301,7 +301,7 @@ bool trustprobe_parse_sbat_level(const unsigned char *buf, size_t len,
     return true;
 }
 
-bool trustprobe_sbat_entries_present(const char *text) {
+bool bythos_sbat_entries_present(const char *text) {
     if (text == NULL) return false;
     const char *t = text;
     while (*t == ' ' || *t == '\t' || *t == '\r' || *t == '\n') t++;
@@ -310,7 +310,7 @@ bool trustprobe_sbat_entries_present(const char *text) {
     return true;
 }
 
-bool trustprobe_sb_has_ms_ca(const char *text) {
+bool bythos_sb_has_ms_ca(const char *text) {
     if (text == NULL) return false;
     /* covers CN=Microsoft Corporation UEFI CA 2011 and CN=Microsoft UEFI CA 2023 */
     return strstr(text, "Microsoft Corporation UEFI CA") != NULL ||

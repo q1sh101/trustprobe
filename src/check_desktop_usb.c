@@ -7,40 +7,40 @@
 #include "checks.h"
 #include "runtime.h"
 
-static const char *const TRUSTPROBE_DCONF_POLICY_PATH = "/etc/dconf/db/local.d/00-usb-hardening";
-static const char *const TRUSTPROBE_DCONF_PROFILE_PATH = "/etc/dconf/profile/user";
-static const char *const TRUSTPROBE_DCONF_USB_PROTECTION_KEY = "usb-protection";
-static const char *const TRUSTPROBE_DCONF_AUTOMOUNT_KEY = "automount";
-static const char *const TRUSTPROBE_DCONF_AUTOMOUNT_OPEN_KEY = "automount-open";
-static const char *const TRUSTPROBE_DCONF_AUTORUN_KEY = "autorun-never";
-static const char *const TRUSTPROBE_DCONF_READ_ONLY_MEDIA_KEY = "mount-removable-storage-devices-as-read-only";
+static const char *const BYTHOS_DCONF_POLICY_PATH = "/etc/dconf/db/local.d/00-usb-hardening";
+static const char *const BYTHOS_DCONF_PROFILE_PATH = "/etc/dconf/profile/user";
+static const char *const BYTHOS_DCONF_USB_PROTECTION_KEY = "usb-protection";
+static const char *const BYTHOS_DCONF_AUTOMOUNT_KEY = "automount";
+static const char *const BYTHOS_DCONF_AUTOMOUNT_OPEN_KEY = "automount-open";
+static const char *const BYTHOS_DCONF_AUTORUN_KEY = "autorun-never";
+static const char *const BYTHOS_DCONF_READ_ONLY_MEDIA_KEY = "mount-removable-storage-devices-as-read-only";
 
 static bool dconf_value_matches(const char *path, const char *key, const char *expected) {
     char value[64] = {0};
 
-    if (!trustprobe_read_key_value(path, key, value, sizeof(value))) {
+    if (!bythos_read_key_value(path, key, value, sizeof(value))) {
         return false;
     }
 
     return strcmp(value, expected) == 0;
 }
 
-size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results) {
-    const char *dconf_policy = TRUSTPROBE_DCONF_POLICY_PATH;
-    const char *dconf_profile = TRUSTPROBE_DCONF_PROFILE_PATH;
+size_t bythos_check_desktop_usb(check_result_t *results, size_t max_results) {
+    const char *dconf_policy = BYTHOS_DCONF_POLICY_PATH;
+    const char *dconf_profile = BYTHOS_DCONF_PROFILE_PATH;
     size_t used = 0;
     bool has_systemctl = false;
     bool policy_readable = false;
     static const char *usbguard_dbus_enabled_argv[] = {"systemctl", "is-enabled", "usbguard-dbus.service", NULL};
 
-    has_systemctl = trustprobe_command_exists("systemctl");
+    has_systemctl = bythos_command_exists("systemctl");
 
     if (used < max_results) {
         char buffer[128] = {0};
         int exit_status = 0;
         if (!has_systemctl) {
             results[used++] = make_result("usbguard-dbus masked", CHECK_WARN, "systemctl not available");
-        } else if (trustprobe_capture_argv_status(usbguard_dbus_enabled_argv, buffer, sizeof(buffer), &exit_status)) {
+        } else if (bythos_capture_argv_status(usbguard_dbus_enabled_argv, buffer, sizeof(buffer), &exit_status)) {
             if (strstr(buffer, "masked") != NULL) {
                 results[used++] = make_result("usbguard-dbus masked", CHECK_OK, "D-Bus bridge disabled at socket level");
             } else if (strstr(buffer, "disabled") != NULL) {
@@ -73,7 +73,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
          * These dconf keys are desktop-side guardrails around removable media behavior.
          * Missing them weakens the boundary, but does not override USBGuard's primary deny path by itself.
          */
-        if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_USB_PROTECTION_KEY, "false")) {
+        if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_USB_PROTECTION_KEY, "false")) {
             results[used++] = make_result("GNOME USB protection", CHECK_OK, "usb-protection deferred to USBGuard");
         } else {
             results[used++] = make_result("GNOME USB protection", CHECK_WARN, "usb-protection=false not found");
@@ -81,8 +81,8 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
     }
 
     if (policy_readable && used < max_results) {
-        if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_AUTOMOUNT_KEY, "false") &&
-            dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_AUTOMOUNT_OPEN_KEY, "false")) {
+        if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTOMOUNT_KEY, "false") &&
+            dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTOMOUNT_OPEN_KEY, "false")) {
             results[used++] = make_result("automount disabled", CHECK_OK, "automount-open also disabled");
         } else {
             results[used++] = make_result("automount disabled", CHECK_WARN, "missing automount hardening keys");
@@ -90,7 +90,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
     }
 
     if (policy_readable && used < max_results) {
-        if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_AUTORUN_KEY, "true")) {
+        if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTORUN_KEY, "true")) {
             results[used++] = make_result("autorun disabled", CHECK_OK, "autorun-never set");
         } else {
             results[used++] = make_result("autorun disabled", CHECK_WARN, "autorun-never not found");
@@ -98,7 +98,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
     }
 
     if (policy_readable && used < max_results) {
-        if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_READ_ONLY_MEDIA_KEY, "true")) {
+        if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_READ_ONLY_MEDIA_KEY, "true")) {
             results[used++] = make_result("removable media lockdown", CHECK_OK, "read-only enforced");
         } else {
             results[used++] = make_result("removable media lockdown", CHECK_WARN, "read-only enforcement not found");
@@ -106,7 +106,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
     }
 
     if (used < max_results) {
-        if (trustprobe_file_exists(dconf_profile)) {
+        if (bythos_file_exists(dconf_profile)) {
             results[used++] = make_result("dconf system profile", CHECK_OK, "system dconf profile present");
         } else {
             results[used++] = make_result("dconf system profile", CHECK_WARN, "system dconf profile missing");

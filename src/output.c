@@ -52,14 +52,14 @@ static void vprint_prefixed(FILE *stream, const char *color, const char *label, 
     fputc('\n', stream);
 }
 
-static void trustprobe_log(const char *fmt, ...) {
+static void bythos_log(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    vprint_prefixed(stdout, c_brand(), "[trustprobe]", fmt, args);
+    vprint_prefixed(stdout, c_brand(), "[bythos]", fmt, args);
     va_end(args);
 }
 
-const char *trustprobe_state_name(check_state_t state) {
+const char *bythos_state_name(check_state_t state) {
     switch (state) {
     case CHECK_OK:
         return "OK";
@@ -100,12 +100,12 @@ static void print_result_line(const char *display_name, const check_result_t *re
     fputc('\n', stdout);
 }
 
-static void trustprobe_print_result_in_subgroup(const check_result_t *result,
+static void bythos_print_result_in_subgroup(const check_result_t *result,
                                              const char *subgroup_name) {
     print_result_line(strip_subgroup_prefix(result->name, subgroup_name), result);
 }
 
-void trustprobe_summary_add(posture_summary_t *summary, const check_result_t *result) {
+void bythos_summary_add(posture_summary_t *summary, const check_result_t *result) {
     switch (result->state) {
     case CHECK_OK:
         summary->ok_count++;
@@ -122,7 +122,7 @@ void trustprobe_summary_add(posture_summary_t *summary, const check_result_t *re
     }
 }
 
-check_state_t trustprobe_summary_state(const posture_summary_t *summary) {
+check_state_t bythos_summary_state(const posture_summary_t *summary) {
     if (summary->fail_count > 0) {
         return CHECK_FAIL;
     }
@@ -135,9 +135,9 @@ check_state_t trustprobe_summary_state(const posture_summary_t *summary) {
     return CHECK_SKIP;
 }
 
-static void trustprobe_print_summary(const char *name, const posture_summary_t *summary) {
+static void bythos_print_summary(const char *name, const posture_summary_t *summary) {
     static const char *names[] = {"ok", "warn", "fail", "skip"};
-    check_state_t state = trustprobe_summary_state(summary);
+    check_state_t state = bythos_summary_state(summary);
     const char *sname = (unsigned)state < 4 ? names[state] : "unknown";
     printf(
         "  %s%s%s  %s%s:%s  %zu ok  %zu warn  %zu fail  %zu skip\n",
@@ -181,7 +181,7 @@ static void print_json_string(const char *text) {
 
 static void print_json_summary(const posture_summary_t *summary) {
     printf("{\"state\":");
-    print_json_string(trustprobe_state_name(trustprobe_summary_state(summary)));
+    print_json_string(bythos_state_name(bythos_summary_state(summary)));
     printf(
         ",\"counts\":{\"ok\":%zu,\"warn\":%zu,\"fail\":%zu,\"skip\":%zu}}",
         summary->ok_count, summary->warn_count,
@@ -202,10 +202,10 @@ static const char *exit_meaning(int exit_code) {
     }
 }
 
-static void trustprobe_print_json(
+static void bythos_print_json(
     const char *mode,
     const char *banner,
-    const trustprobe_group_view_t *groups,
+    const bythos_group_view_t *groups,
     size_t group_count,
     const posture_summary_t *overall,
     int exit_code
@@ -243,7 +243,7 @@ static void trustprobe_print_json(
                 printf("{\"name\":");
                 print_json_string(result->name);
                 printf(",\"state\":");
-                print_json_string(trustprobe_state_name(result->state));
+                print_json_string(bythos_state_name(result->state));
                 printf(",\"detail\":");
                 print_json_string(result->detail);
                 printf(",\"requires_root\":%s}", result->requires_root ? "true" : "false");
@@ -261,7 +261,7 @@ static void trustprobe_print_json(
 }
 
 static void print_groups_hierarchy(
-    const trustprobe_group_view_t *groups,
+    const bythos_group_view_t *groups,
     size_t group_count
 ) {
     for (size_t g = 0; g < group_count; g++) {
@@ -272,24 +272,24 @@ static void print_groups_hierarchy(
             if (sg->result_count == 0) continue;
             printf("    %s%s%s\n", c_accent(), sg->name, c_reset());
             for (size_t i = 0; i < sg->result_count; i++) {
-                trustprobe_print_result_in_subgroup(&sg->results[i], sg->name);
+                bythos_print_result_in_subgroup(&sg->results[i], sg->name);
             }
             putchar('\n');
         }
-        trustprobe_print_summary(groups[g].name, groups[g].summary);
+        bythos_print_summary(groups[g].name, groups[g].summary);
         putchar('\n');
     }
 }
 
-static void trustprobe_print_plain(
+static void bythos_print_plain(
     const char *banner,
-    const trustprobe_group_view_t *groups,
+    const bythos_group_view_t *groups,
     size_t group_count,
     const posture_summary_t *overall
 ) {
     static const char *snames[] = {"ok", "warn", "fail", "skip"};
-    check_state_t ost = trustprobe_summary_state(overall);
-    trustprobe_log("%s", banner);
+    check_state_t ost = bythos_summary_state(overall);
+    bythos_log("%s", banner);
     putchar('\n');
     printf("  %soverall%s  %s%s:%s  %zu ok  %zu warn  %zu fail  %zu skip\n\n",
         c_brand(), c_reset(),
@@ -299,18 +299,18 @@ static void trustprobe_print_plain(
     print_groups_hierarchy(groups, group_count);
 }
 
-void trustprobe_render(
-    trustprobe_render_mode_t mode,
+void bythos_render(
+    bythos_render_mode_t mode,
     const char *mode_str,
     const char *banner,
-    const trustprobe_group_view_t *groups,
+    const bythos_group_view_t *groups,
     size_t group_count,
     const posture_summary_t *overall,
     int exit_code
 ) {
-    if (mode == TRUSTPROBE_RENDER_JSON) {
-        trustprobe_print_json(mode_str, banner, groups, group_count, overall, exit_code);
+    if (mode == BYTHOS_RENDER_JSON) {
+        bythos_print_json(mode_str, banner, groups, group_count, overall, exit_code);
     } else {
-        trustprobe_print_plain(banner, groups, group_count, overall);
+        bythos_print_plain(banner, groups, group_count, overall);
     }
 }

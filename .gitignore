@@ -1,6 +1,6 @@
-trustprobe
+bythos
 tests/runtime_capture
-tmp-trustprobe-*
+tmp-bythos-*
 tests/rules_parser
 tests/policy_parser
 tests/silicon_parsers

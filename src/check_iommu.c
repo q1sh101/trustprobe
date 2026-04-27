@@ -6,7 +6,7 @@
 #include "runtime.h"
 #include "silicon_parsers.h"
 
-size_t trustprobe_check_iommu(check_result_t *results, size_t max_results) {
+size_t bythos_check_iommu(check_result_t *results, size_t max_results) {
     size_t used = 0;
     const char *cmdline_path = "/proc/cmdline";
     const char *groups_path = "/sys/kernel/iommu_groups";
@@ -14,10 +14,10 @@ size_t trustprobe_check_iommu(check_result_t *results, size_t max_results) {
     bool groups_visible = false;
 
     if (used < max_results) {
-        if (trustprobe_count_child_dirs(groups_path, &group_count) && group_count > 0) {
+        if (bythos_count_child_dirs(groups_path, &group_count) && group_count > 0) {
             char detail[128];
             snprintf(detail, sizeof(detail), "%zu %s active",
-                group_count, trustprobe_pl(group_count, "group", "groups"));
+                group_count, bythos_pl(group_count, "group", "groups"));
             groups_visible = true;
             results[used++] = make_result("IOMMU groups", CHECK_OK, detail);
         } else {
@@ -27,9 +27,9 @@ size_t trustprobe_check_iommu(check_result_t *results, size_t max_results) {
 
     if (used < max_results) {
         char cmdline[4096] = {0};
-        trustprobe_iommu_cmdline_t parsed = {0};
+        bythos_iommu_cmdline_t parsed = {0};
 
-        if (!trustprobe_read_file_text(cmdline_path, cmdline, sizeof(cmdline))) {
+        if (!bythos_read_file_text(cmdline_path, cmdline, sizeof(cmdline))) {
             if (groups_visible) {
                 results[used++] = make_result("IOMMU DMA posture", CHECK_OK, "runtime groups visible; kernel cmdline unavailable");
             } else {
@@ -38,7 +38,7 @@ size_t trustprobe_check_iommu(check_result_t *results, size_t max_results) {
             return used;
         }
 
-        trustprobe_parse_iommu_cmdline(cmdline, &parsed);
+        bythos_parse_iommu_cmdline(cmdline, &parsed);
 
         if (parsed.iommu_disabled) {
             results[used++] = make_result("IOMMU DMA posture", CHECK_FAIL, "IOMMU disabled in kernel cmdline");
