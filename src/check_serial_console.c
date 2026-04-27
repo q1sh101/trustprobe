@@ -27,9 +27,9 @@ size_t trustprobe_check_serial_console(check_result_t *results, size_t max_resul
 
     if (used < max_results) {
         if (cmdline_has_serial_console()) {
-            results[used++] = make_result("Serial kernel console", CHECK_WARN, "serial console active in kernel cmdline");
+            results[used++] = make_result("serial kernel console", CHECK_WARN, "active in kernel cmdline");
         } else {
-            results[used++] = make_result("Serial kernel console", CHECK_OK, "no serial console in kernel cmdline");
+            results[used++] = make_result("serial kernel console", CHECK_OK, "absent from kernel cmdline");
         }
     }
 
@@ -58,15 +58,15 @@ size_t trustprobe_check_serial_console(check_result_t *results, size_t max_resul
         }
 
         if (systemctl_unavailable && !any_present && active_unit == NULL) {
-            results[used++] = make_result("Serial getty service", CHECK_SKIP, "systemctl not available");
+            results[used++] = make_result("serial getty service", CHECK_SKIP, "systemctl not available");
         } else if (active_unit != NULL) {
             char detail[TRUSTPROBE_DETAIL_MAX];
             snprintf(detail, sizeof(detail), "%s is active", active_unit);
-            results[used++] = make_result("Serial getty service", CHECK_WARN, detail);
+            results[used++] = make_result("serial getty service", CHECK_WARN, detail);
         } else if (any_present) {
-            results[used++] = make_result("Serial getty service", CHECK_OK, "no serial getty service active");
+            results[used++] = make_result("serial getty service", CHECK_OK, "none active");
         } else {
-            results[used++] = make_result("Serial getty service", CHECK_SKIP, "no serial getty service present");
+            results[used++] = make_result("serial getty service", CHECK_SKIP, "none present");
         }
     }
 

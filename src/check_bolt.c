@@ -74,13 +74,13 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "systemctl not available");
             break;
         case TRUSTPROBE_SERVICE_STATE_ACTIVE:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_OK, "service is running");
+            results[used++] = make_result("Thunderbolt policy service", CHECK_OK, "running");
             break;
         case TRUSTPROBE_SERVICE_STATE_INACTIVE:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_WARN, "service is installed but inactive");
+            results[used++] = make_result("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
             break;
         case TRUSTPROBE_SERVICE_STATE_MISSING:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "service not installed");
+            results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "not installed");
             break;
         default:
             results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "state unavailable");
@@ -106,18 +106,16 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             char *trimmed = trustprobe_trim(level);
 
             if (strcmp(trimmed, "secure") == 0 || strcmp(trimmed, "dponly") == 0) {
-                char detail[TRUSTPROBE_DETAIL_MAX];
-                snprintf(detail, sizeof(detail), "Thunderbolt security level: %s", trimmed);
-                results[used++] = make_result("Thunderbolt security level", CHECK_OK, detail);
+                results[used++] = make_result("Thunderbolt security level", CHECK_OK, trimmed);
             } else if (strcmp(trimmed, "user") == 0) {
                 results[used++] = make_result("Thunderbolt security level", CHECK_OK,
-                    "Thunderbolt security level: user (authorize on connect)");
+                    "user (authorize on connect)");
             } else if (strcmp(trimmed, "none") == 0) {
                 results[used++] = make_result("Thunderbolt security level", CHECK_WARN,
-                    "Thunderbolt security level: none (all devices trusted)");
+                    "none (all devices trusted)");
             } else {
                 char detail[TRUSTPROBE_DETAIL_MAX];
-                snprintf(detail, sizeof(detail), "Thunderbolt security level: %s", trimmed);
+                snprintf(detail, sizeof(detail), "%s (unknown level)", trimmed);
                 results[used++] = make_result("Thunderbolt security level", CHECK_WARN, detail);
             }
         }
@@ -140,10 +138,10 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             char *trimmed = trustprobe_trim(buffer);
             if (*trimmed == '\0') {
                 results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
-                    "no visible Thunderbolt devices");
+                    "none visible");
             } else {
                 results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
-                    "device list available");
+                    "inventory available");
             }
         }
     }
@@ -157,10 +155,10 @@ size_t trustprobe_check_bolt(check_result_t *results, size_t max_results) {
             char *v = trustprobe_trim(val);
             if (strcmp(v, "1") == 0) {
                 results[used++] = make_result("Thunderbolt DMA protection", CHECK_OK,
-                    "pre-boot DMA protection active");
+                    "pre-boot DMA active");
             } else {
                 results[used++] = make_result("Thunderbolt DMA protection", CHECK_WARN,
-                    "pre-boot DMA protection not active");
+                    "pre-boot DMA inactive");
             }
         }
     }

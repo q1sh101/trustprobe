@@ -20,13 +20,13 @@ size_t trustprobe_check_bios_cntl(check_result_t *results, size_t max_results) {
     }
 
     if (!trustprobe_file_exists(INTEL_PCH_CONFIG)) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_SKIP, "Intel PCH not found");
+        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "Intel PCH not found");
         return used;
     }
 
     int fd = open(INTEL_PCH_CONFIG, O_RDONLY);
     if (fd < 0) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_SKIP, "PCI config not readable");
+        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "PCI config not readable");
         return used;
     }
 
@@ -35,7 +35,7 @@ size_t trustprobe_check_bios_cntl(check_result_t *results, size_t max_results) {
     close(fd);
 
     if (n != 1) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_SKIP, "BIOS_CNTL register unreadable");
+        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "BIOS_CNTL register unreadable");
         return used;
     }
 
@@ -44,16 +44,16 @@ size_t trustprobe_check_bios_cntl(check_result_t *results, size_t max_results) {
     unsigned int smm_bwp = (unsigned int)((byte >> 5) & 0x01u);
 
     if (bioswe) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_WARN,
+        results[used++] = make_result("Intel BIOS write protection", CHECK_WARN,
             "BIOSWE set: BIOS region write enabled");
     } else if (!ble) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_WARN,
+        results[used++] = make_result("Intel BIOS write protection", CHECK_WARN,
             "BLE not set: BIOS lock enable missing");
     } else if (!smm_bwp) {
-        results[used++] = make_result("BIOS_CNTL", CHECK_WARN,
+        results[used++] = make_result("Intel BIOS write protection", CHECK_WARN,
             "SMM_BWP not set: SMM-only write not enforced");
     } else {
-        results[used++] = make_result("BIOS_CNTL", CHECK_OK,
+        results[used++] = make_result("Intel BIOS write protection", CHECK_OK,
             "BLE and SMM_BWP set; BIOS region protected");
     }
 

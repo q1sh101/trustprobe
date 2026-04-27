@@ -26,7 +26,7 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
             results[used++] = make_result("usbguard active", CHECK_WARN, "systemctl not available");
             break;
         case TRUSTPROBE_SERVICE_STATE_ACTIVE:
-            results[used++] = make_result("usbguard active", CHECK_OK, "service is running");
+            results[used++] = make_result("usbguard active", CHECK_OK, "running");
             break;
         case TRUSTPROBE_SERVICE_STATE_INACTIVE:
             results[used++] = make_result("usbguard active", CHECK_FAIL, "installed but inactive");
@@ -45,7 +45,7 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
         if (stat(rules_path, &rules_stat) != 0) {
             results[used++] = make_result("usbguard rules", CHECK_FAIL, "rules.conf not found");
         } else if (rules_stat.st_size > 0) {
-            results[used++] = make_result("usbguard rules", CHECK_OK, "rules.conf present and non-empty");
+            results[used++] = make_result("usbguard rules", CHECK_OK, "conf present and non-empty");
         } else {
             results[used++] = make_result("usbguard rules", CHECK_FAIL, "rules.conf exists but is empty");
         }
@@ -74,7 +74,7 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
                         snprintf(detail, sizeof(detail), "%zu wildcard allow rules found", report.wildcard_allow_count);
                         results[used++] = make_result("usbguard wildcard rules", CHECK_FAIL, detail);
                     } else {
-                        results[used++] = make_result("usbguard wildcard rules", CHECK_OK, "no wildcard allow rules detected");
+                        results[used++] = make_result("usbguard wildcard rules", CHECK_OK, "none detected");
                     }
                 }
 
@@ -106,7 +106,7 @@ size_t trustprobe_check_usbguard(check_result_t *results, size_t max_results) {
                         snprintf(
                             detail,
                             sizeof(detail),
-                            "%zu without hash / %zu without connect-type",
+                            "%zu without hash, %zu without connect-type",
                             report.allow_without_hash_count,
                             report.allow_without_connect_type_count
                         );

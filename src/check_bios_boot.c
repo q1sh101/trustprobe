@@ -82,30 +82,30 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
     if (used < max_results) {
         if (usb_in_order) {
             results[used++] = make_result("EFI USB boot",
-                CHECK_WARN, "active USB boot entry in EFI boot order");
+                CHECK_WARN, "active entry in EFI boot order");
         } else {
             results[used++] = make_result("EFI USB boot",
-                CHECK_OK, "no active USB boot entry in EFI boot order");
+                CHECK_OK, "no active entry in EFI boot order");
         }
     }
 
     if (used < max_results) {
         if (net_in_order) {
             results[used++] = make_result("EFI network boot",
-                CHECK_WARN, "active network boot entry in EFI boot order");
+                CHECK_WARN, "active entry in EFI boot order");
         } else {
             results[used++] = make_result("EFI network boot",
-                CHECK_OK, "no active network boot entry in EFI boot order");
+                CHECK_OK, "no active entry in EFI boot order");
         }
     }
 
     if (used < max_results) {
         if (cd_in_order) {
             results[used++] = make_result("EFI CD/DVD boot",
-                CHECK_WARN, "active CD/DVD boot entry in EFI boot order");
+                CHECK_WARN, "active entry in EFI boot order");
         } else {
             results[used++] = make_result("EFI CD/DVD boot",
-                CHECK_OK, "no active CD/DVD boot entry in EFI boot order");
+                CHECK_OK, "no active entry in EFI boot order");
         }
     }
 
@@ -117,7 +117,7 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
 
         if (!trustprobe_file_exists(EFI_BOOT_NEXT_PATH)) {
             results[used++] = make_result("EFI one-shot boot",
-                CHECK_OK, "no one-shot EFI boot override");
+                CHECK_OK, "no boot override pending");
         } else if (!trustprobe_read_file_binary(EFI_BOOT_NEXT_PATH, next_buf,
                                                  sizeof(next_buf), &next_len) ||
                    !trustprobe_parse_efi_boot_next(next_buf, next_len, &next_number)) {
@@ -139,7 +139,7 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
                     CHECK_WARN, "BootNext overrides to CD/DVD boot");
             } else {
                 results[used++] = make_result("EFI one-shot boot",
-                    CHECK_OK, "BootNext points to non-risky entry");
+                    CHECK_OK, "BootNext does not point to USB, network, or optical boot");
             }
         }
     }
@@ -246,12 +246,12 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     lower_value[vlen] = '\0';
 
     if (strstr(lower_value, "disable") != NULL) {
-        results[used++] = make_result("BIOS USB boot", CHECK_OK, "USB boot disabled via firmware-attributes");
+        results[used++] = make_result("BIOS USB boot", CHECK_OK, "disabled via firmware-attributes");
     } else if (strstr(lower_value, "enable") != NULL) {
-        results[used++] = make_result("BIOS USB boot", CHECK_WARN, "USB boot enabled; consider disabling in BIOS");
+        results[used++] = make_result("BIOS USB boot", CHECK_WARN, "enabled; consider disabling in BIOS");
     } else {
         char detail[TRUSTPROBE_DETAIL_MAX];
-        snprintf(detail, sizeof(detail), "USB boot setting: %s", value);
+        snprintf(detail, sizeof(detail), "setting: %s", value);
         results[used++] = make_result("BIOS USB boot", CHECK_WARN, detail);
     }
 
@@ -282,7 +282,7 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
             strstr(buf, "must be root") != NULL ||
             strstr(buf, "requires root") != NULL) {
             results[used++] = make_root_result("Firmware password", CHECK_SKIP,
-                "requires root to read DMI hardware security");
+                "DMI hardware security not readable");
         } else {
             results[used++] = make_result("Firmware password", CHECK_SKIP,
                 "firmware password state not readable");
@@ -305,10 +305,10 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
 
     if (strncmp(pos, "Enabled", 7) == 0) {
         results[used++] = make_result("Firmware password", CHECK_OK,
-            "firmware administrator password is set");
+            "administrator password set");
     } else if (strncmp(pos, "Disabled", 8) == 0) {
         results[used++] = make_result("Firmware password", CHECK_WARN,
-            "no firmware administrator password set");
+            "no administrator password set");
     } else {
         results[used++] = make_result("Firmware password", CHECK_SKIP,
             "firmware password state not readable");
@@ -346,10 +346,10 @@ static size_t check_efivars_immutable(check_result_t *results, size_t max_result
 
     if (flags & (unsigned int)FS_IMMUTABLE_FL) {
         results[used++] = make_result("EFI BootOrder immutable", CHECK_OK,
-            "BootOrder immutable flag set");
+            "flag set");
     } else {
         results[used++] = make_result("EFI BootOrder immutable", CHECK_WARN,
-            "BootOrder immutable flag not set");
+            "flag not set");
     }
     return used;
 }

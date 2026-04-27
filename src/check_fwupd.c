@@ -23,13 +23,13 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
             results[used++] = make_result("fwupd service", CHECK_SKIP, "systemctl not available");
             break;
         case TRUSTPROBE_SERVICE_STATE_ACTIVE:
-            results[used++] = make_result("fwupd service", CHECK_OK, "service is running");
+            results[used++] = make_result("fwupd service", CHECK_OK, "running");
             break;
         case TRUSTPROBE_SERVICE_STATE_INACTIVE:
-            results[used++] = make_result("fwupd service", CHECK_WARN, "service is installed but inactive");
+            results[used++] = make_result("fwupd service", CHECK_WARN, "installed but inactive");
             break;
         case TRUSTPROBE_SERVICE_STATE_MISSING:
-            results[used++] = make_result("fwupd service", CHECK_WARN, "service not installed");
+            results[used++] = make_result("fwupd service", CHECK_WARN, "not installed");
             break;
         default:
             results[used++] = make_result("fwupd service", CHECK_SKIP, "state unavailable");
@@ -46,9 +46,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         } else if (!trustprobe_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
             results[used++] = make_result("LVFS remote", CHECK_WARN, "Enabled key not found");
         } else if (strcmp(enabled, "true") == 0) {
-            results[used++] = make_result("LVFS remote", CHECK_OK, "LVFS remote enabled");
+            results[used++] = make_result("LVFS remote", CHECK_OK, "enabled");
         } else {
-            results[used++] = make_result("LVFS remote", CHECK_WARN, "LVFS remote not enabled");
+            results[used++] = make_result("LVFS remote", CHECK_WARN, "not enabled");
         }
     }
 
@@ -59,7 +59,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         } else if ((devices = trustprobe_run_argv_quiet(fwupd_devices_argv)) == 0) {
             results[used++] = make_result("firmware inventory", CHECK_OK, "device list available");
         } else {
-            results[used++] = make_result("firmware inventory", CHECK_SKIP, "unable to list firmware devices");
+            results[used++] = make_result("firmware inventory", CHECK_SKIP, "unable to list devices");
         }
     }
 
@@ -71,13 +71,13 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         if (!has_fwupdmgr) {
             results[used++] = make_result("firmware update status", CHECK_SKIP, "fwupdmgr not installed");
         } else if (!trustprobe_capture_argv_status(fwupd_updates_argv, buffer, sizeof(buffer), &status)) {
-            results[used++] = make_result("firmware update status", CHECK_SKIP, "unable to query firmware updates");
+            results[used++] = make_result("firmware update status", CHECK_SKIP, "unable to query");
         } else if ((updates = trustprobe_parse_fwupd_updates(buffer, status)) == TRUSTPROBE_FWUPD_UPDATES_NONE) {
             results[used++] = make_result("firmware update status", CHECK_OK, "no updates available");
         } else if (updates == TRUSTPROBE_FWUPD_UPDATES_AVAILABLE) {
-            results[used++] = make_result("firmware update status", CHECK_WARN, "firmware updates available");
+            results[used++] = make_result("firmware update status", CHECK_WARN, "updates available");
         } else {
-            results[used++] = make_result("firmware update status", CHECK_SKIP, "update status unavailable");
+            results[used++] = make_result("firmware update status", CHECK_SKIP, "unavailable");
         }
     }
 
@@ -94,9 +94,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
         } else if (hist_status != 0) {
             results[used++] = make_result("firmware update history", CHECK_SKIP, "history unavailable");
         } else if (hist_buffer[0] != '\0') {
-            results[used++] = make_result("firmware update history", CHECK_OK, "firmware update history available");
+            results[used++] = make_result("firmware update history", CHECK_OK, "available");
         } else {
-            results[used++] = make_result("firmware update history", CHECK_OK, "no update history visible");
+            results[used++] = make_result("firmware update history", CHECK_SKIP, "no history visible");
         }
     }
 
@@ -116,7 +116,7 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
 
     if (!hsi_ok) {
         if (used < max_results) {
-            results[used++] = make_result("HSI: firmware lock", CHECK_SKIP,
+            results[used++] = make_result("HSI query", CHECK_SKIP,
                 has_fwupdmgr ? "security query failed" : "fwupdmgr not installed");
         }
         return used;
@@ -144,40 +144,40 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
              "security fuses set",                    "security fuses not set");
     EMIT_HSI("HSI: debug locked",
              "org.fwupd.hsi.PlatformDebugLocked",     "locked",
-             "debug interface locked",                "debug interface not locked");
+             "locked",                                "not locked");
     EMIT_HSI("HSI: Secure Boot",
              "org.fwupd.hsi.Uefi.SecureBoot",         "enabled",
-             "Secure Boot enabled",                   "Secure Boot not enabled");
+             "enabled",                               "not enabled");
     EMIT_HSI("HSI: UEFI PK",
              "org.fwupd.hsi.Uefi.Pk",                 "valid",
-             "PK enrolled",                           "PK not enrolled");
+             "enrolled",                              "not enrolled");
     EMIT_HSI("HSI: UEFI db",
              "org.fwupd.hsi.Uefi.Db",                 "valid",
-             "signature db valid",                    "signature db not valid");
+             "valid",                                 "not valid");
     EMIT_HSI("HSI: DBX currency",
              "org.fwupd.hsi.UefiDbxUpdates",          "valid",
-             "DBX revocation list current",           "DBX revocation list outdated");
+             "revocation list current",               "revocation list outdated");
     EMIT_HSI("HSI: UEFI boot variables",
              "org.fwupd.hsi.Uefi.BootserviceVars",    "locked",
-             "boot service variables locked",         "boot service variables not locked");
+             "locked",                                "not locked");
     EMIT_HSI("HSI: capsule updates",
              "org.fwupd.hsi.Bios.CapsuleUpdates",     "enabled",
-             "capsule update authentication enabled", "capsule update authentication not enabled");
+             "authentication enabled",               "authentication not enabled");
     EMIT_HSI("HSI: TPM 2.0",
              "org.fwupd.hsi.Tpm.Version20",           "found",
-             "TPM 2.0 present",                       "TPM 2.0 not found");
+             "present",                               "not found");
     EMIT_HSI("HSI: TPM empty PCR",
              "org.fwupd.hsi.Tpm.EmptyPcr",           "valid",
-             "no unexpected empty PCRs",              "unexpected empty TPM PCR");
+             "no unexpected empty PCRs",              "unexpected empty PCR found");
     EMIT_HSI("HSI: TPM PCR0 reconstruction",
              "org.fwupd.hsi.Tpm.ReconstructionPcr0", "valid",
-             "PCR0 reconstruction valid",             "PCR0 reconstruction failed");
+             "valid",                                 "failed");
     EMIT_HSI("HSI: IOMMU",
              "org.fwupd.hsi.Iommu",                   "enabled",
-             "IOMMU enabled",                         "IOMMU not enabled");
+             "enabled",                               "not enabled");
     EMIT_HSI("HSI: pre-boot DMA protection",
              "org.fwupd.hsi.PrebootDma",              "enabled",
-             "pre-boot DMA protection active",        "pre-boot DMA protection not active");
+             "active",                                "not active");
     EMIT_HSI("HSI: encrypted RAM",
              "org.fwupd.hsi.EncryptedRam",            "enabled",
              "memory encryption active",              "memory encryption not active");
@@ -186,32 +186,32 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
     if (vendor == TRUSTPROBE_CPU_VENDOR_AMD) {
         EMIT_HSI("HSI: SMM locked",
                  "org.fwupd.hsi.Amd.SmmLocked",          "locked",
-                 "SMM locked",                            "SMM not locked");
+                 "locked",                                "not locked");
         EMIT_HSI("HSI: SPI replay protection",
                  "org.fwupd.hsi.Amd.SpiReplayProtection", "enabled",
-                 "SPI replay protection enabled",         "SPI replay protection not enabled");
+                 "enabled",                               "not enabled");
         EMIT_HSI("HSI: firmware rollback protection",
                  "org.fwupd.hsi.Amd.RollbackProtection",  "enabled",
-                 "rollback protection enabled",           "rollback protection not enabled");
+                 "enabled",                               "not enabled");
         EMIT_HSI("HSI: SPI write protection",
                  "org.fwupd.hsi.Amd.SpiWriteProtection",  "enabled",
-                 "SPI write protection enabled",          "SPI write protection not enabled");
+                 "enabled",                               "not enabled");
     }
 
     /* Intel-only */
     if (vendor == TRUSTPROBE_CPU_VENDOR_INTEL) {
         EMIT_HSI("HSI: BIOS write protection",
                  "org.fwupd.hsi.BiosWriteProtection",     "enabled",
-                 "BIOS write protection enabled",         "BIOS write protection not enabled");
+                 "enabled",                               "not enabled");
         EMIT_HSI("HSI: ME manufacturing mode",
                  "org.fwupd.hsi.IntelMeMfgMode",          "locked",
-                 "ME not in manufacturing mode",          "ME in manufacturing mode");
+                 "not in manufacturing mode",             "in manufacturing mode");
         EMIT_HSI("HSI: Boot Guard ACM",
                  "org.fwupd.hsi.IntelBootguard.Acm",     "valid",
-                 "Boot Guard ACM valid",                  "Boot Guard ACM not valid");
+                 "valid",                                 "not valid");
         EMIT_HSI("HSI: Boot Guard policy",
                  "org.fwupd.hsi.IntelBootguard.Policy",  "valid",
-                 "Boot Guard policy valid",               "Boot Guard policy not valid");
+                 "valid",                                 "not valid");
 
         if (used < max_results) {
             char en_val[64]  = {0};
@@ -226,9 +226,9 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
             } else if (strcmp(en_val, "not-supported") == 0) {
                 results[used++] = make_result("HSI: Boot Guard", CHECK_SKIP, "not supported");
             } else if (strcmp(en_val, "enabled") != 0) {
-                results[used++] = make_result("HSI: Boot Guard", CHECK_WARN, "Boot Guard not enabled");
+                results[used++] = make_result("HSI: Boot Guard", CHECK_WARN, "not enabled");
             } else if (has_ver && strcmp(ver_val, "enabled") != 0) {
-                results[used++] = make_result("HSI: Boot Guard", CHECK_WARN, "Boot Guard measurement-only");
+                results[used++] = make_result("HSI: Boot Guard", CHECK_WARN, "measurement-only");
             } else {
                 results[used++] = make_result("HSI: Boot Guard", CHECK_OK, "enabled and verified");
             }
@@ -246,10 +246,10 @@ size_t trustprobe_check_fwupd(check_result_t *results, size_t max_results) {
                 results[used++] = make_result("HSI: SPI write protection", CHECK_SKIP, "not reported");
             } else if (strcmp(intel_en, "enabled") == 0 && strcmp(intel_lk, "enabled") == 0) {
                 results[used++] = make_result("HSI: SPI write protection", CHECK_OK,
-                    "SPI write protection enabled and locked");
+                    "enabled and locked");
             } else {
                 results[used++] = make_result("HSI: SPI write protection", CHECK_WARN,
-                    "SPI write protection not fully active");
+                    "not fully active");
             }
         }
     }

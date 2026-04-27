@@ -31,7 +31,8 @@ size_t trustprobe_check_efi(check_result_t *results, size_t max_results) {
                     "no ESRT entries; fwupd cannot update firmware");
             } else {
                 char detail[TRUSTPROBE_DETAIL_MAX];
-                snprintf(detail, sizeof(detail), "%zu ESRT firmware entry(ies)", count);
+                snprintf(detail, sizeof(detail), "%zu firmware %s",
+                    count, trustprobe_pl(count, "entry", "entries"));
                 results[used++] = make_result("ESRT entries", CHECK_OK, detail);
             }
         }

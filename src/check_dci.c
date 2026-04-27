@@ -7,26 +7,11 @@
 
 #include "checks.h"
 #include "runtime.h"
+#include "silicon_parsers.h"
 
 #define MSR_IA32_DEBUG_INTERFACE 0xC80ULL
 #define DCI_ENABLE_BIT  (UINT64_C(1) << 0)
 #define DCI_LOCK_BIT    (UINT64_C(1) << 30)
-
-static bool cpu_is_intel(void) {
-    char buf[4096] = {0};
-    if (!trustprobe_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {
-        return false;
-    }
-    return strstr(buf, "GenuineIntel") != NULL;
-}
-
-static bool cpu_is_amd(void) {
-    char buf[4096] = {0};
-    if (!trustprobe_read_file_text("/proc/cpuinfo", buf, sizeof(buf))) {
-        return false;
-    }
-    return strstr(buf, "AuthenticAMD") != NULL;
-}
 
 size_t trustprobe_check_dci(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -35,7 +20,9 @@ size_t trustprobe_check_dci(check_result_t *results, size_t max_results) {
         return used;
     }
 
-    if (cpu_is_amd()) {
+    trustprobe_cpu_vendor_t vendor = trustprobe_cpu_vendor();
+
+    if (vendor == TRUSTPROBE_CPU_VENDOR_AMD) {
         if (trustprobe_file_exists("/sys/module/ccp")) {
             results[used++] = make_result("AMD PSP visibility", CHECK_OK,
                 "AMD PSP driver visible; deep audit requires CHIPSEC");
@@ -46,7 +33,7 @@ size_t trustprobe_check_dci(check_result_t *results, size_t max_results) {
         return used;
     }
 
-    if (!cpu_is_intel()) {
+    if (vendor != TRUSTPROBE_CPU_VENDOR_INTEL) {
         results[used++] = make_result("Intel DCI", CHECK_SKIP, "unknown CPU vendor");
         return used;
     }
@@ -61,7 +48,7 @@ size_t trustprobe_check_dci(check_result_t *results, size_t max_results) {
     int fd = open(MSR_PATH, O_RDONLY);
     if (fd < 0) {
         if (errno == EACCES) {
-            results[used++] = make_root_result("Intel DCI", CHECK_SKIP, "requires root to read MSR");
+            results[used++] = make_root_result("Intel DCI", CHECK_SKIP, "MSR access denied");
         } else {
             results[used++] = make_result("Intel DCI", CHECK_SKIP, "MSR 0xC80 unreadable");
         }

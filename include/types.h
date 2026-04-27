@@ -28,6 +28,15 @@ typedef struct {
     size_t skip_count;
 } posture_summary_t;
 
+#define TRUSTPROBE_MAX_SUBGROUP_RESULTS 32
+
+typedef struct {
+    const char *name;
+    check_result_t results[TRUSTPROBE_MAX_SUBGROUP_RESULTS];
+    size_t result_count;
+    posture_summary_t summary;
+} check_subgroup_t;
+
 static inline check_result_t make_result(const char *name, check_state_t state, const char *detail) {
     check_result_t result = {
         .name = name,
@@ -45,6 +54,10 @@ static inline check_result_t make_root_result(const char *name, check_state_t st
     check_result_t result = make_result(name, state, detail);
     result.requires_root = true;
     return result;
+}
+
+static inline const char *trustprobe_pl(size_t n, const char *singular, const char *plural) {
+    return n == 1 ? singular : plural;
 }
 
 #endif

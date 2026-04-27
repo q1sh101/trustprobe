@@ -16,11 +16,12 @@ size_t trustprobe_check_iommu(check_result_t *results, size_t max_results) {
     if (used < max_results) {
         if (trustprobe_count_child_dirs(groups_path, &group_count) && group_count > 0) {
             char detail[128];
-            snprintf(detail, sizeof(detail), "%zu IOMMU group(s) visible", group_count);
+            snprintf(detail, sizeof(detail), "%zu %s active",
+                group_count, trustprobe_pl(group_count, "group", "groups"));
             groups_visible = true;
             results[used++] = make_result("IOMMU groups", CHECK_OK, detail);
         } else {
-            results[used++] = make_result("IOMMU groups", CHECK_WARN, "no visible IOMMU groups");
+            results[used++] = make_result("IOMMU groups", CHECK_WARN, "none visible");
         }
     }
 

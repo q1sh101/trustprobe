@@ -16,7 +16,7 @@ static void usage(const char *argv0) {
     printf(
         "usage: %s [--json] [all|physical|firmware]\n"
         "\n"
-        "  --json    print machine-readable JSON instead of text output\n"
+        "  --json    machine-readable JSON output (scripts, CI, pipes)\n"
         "  all       run all trust boundary checks (default)\n"
         "  physical  run USB / desktop physical-trust checks\n"
         "  firmware  run Secure Boot / fwupd / signing checks\n",
@@ -25,31 +25,25 @@ static void usage(const char *argv0) {
 }
 
 static const char *banner_text(bool run_physical, bool run_firmware) {
-    if (run_physical && run_firmware) {
-        return "physical trust + firmware posture";
-    }
-    if (run_physical) {
-        return "physical trust posture";
-    }
-    if (run_firmware) {
-        return "firmware trust posture";
-    }
+    if (run_physical && run_firmware) return "firmware trust + physical posture";
+    if (run_firmware) return "firmware trust posture";
+    if (run_physical) return "physical trust posture";
     return "trust posture";
 }
 
 int main(int argc, char **argv) {
     bool run_physical = true;
     bool run_firmware = true;
-    bool json_output = false;
+    trustprobe_render_mode_t render_mode = TRUSTPROBE_RENDER_PLAIN;
     posture_summary_t overall = {0};
     const char *mode = "all";
     int exit_code = TRUSTPROBE_EXIT_OK;
-    check_result_t physical_results[TRUSTPROBE_MAX_GROUP_RESULTS];
-    check_result_t firmware_results[TRUSTPROBE_MAX_GROUP_RESULTS];
+    check_subgroup_t physical_subgroups[TRUSTPROBE_MAX_GROUP_SUBGROUPS];
+    check_subgroup_t firmware_subgroups[TRUSTPROBE_MAX_GROUP_SUBGROUPS];
     posture_summary_t physical_summary = {0};
     posture_summary_t firmware_summary = {0};
-    size_t physical_count = 0;
-    size_t firmware_count = 0;
+    size_t physical_subgroup_count = 0;
+    size_t firmware_subgroup_count = 0;
 
     const char *selected_mode = NULL;
 
@@ -58,7 +52,11 @@ int main(int argc, char **argv) {
             usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "--json") == 0) {
-            json_output = true;
+            if (render_mode != TRUSTPROBE_RENDER_PLAIN) {
+                usage(argv[0]);
+                return TRUSTPROBE_EXIT_USAGE;
+            }
+            render_mode = TRUSTPROBE_RENDER_JSON;
         } else if (strcmp(argv[i], "all") == 0 ||
                    strcmp(argv[i], "physical") == 0 ||
                    strcmp(argv[i], "firmware") == 0) {
@@ -88,69 +86,47 @@ int main(int argc, char **argv) {
         run_firmware = true;
     }
 
-    if (run_physical) {
-        physical_count = trustprobe_check_physical(physical_results, TRUSTPROBE_MAX_GROUP_RESULTS);
-        for (size_t i = 0; i < physical_count; i++) {
-            trustprobe_summary_add(&physical_summary, &physical_results[i]);
-            trustprobe_summary_add(&overall, &physical_results[i]);
+    if (run_firmware) {
+        firmware_subgroup_count = trustprobe_check_firmware(
+            firmware_subgroups, TRUSTPROBE_MAX_GROUP_SUBGROUPS);
+        for (size_t i = 0; i < firmware_subgroup_count; i++) {
+            trustprobe_summary_merge(&firmware_summary, &firmware_subgroups[i].summary);
+            trustprobe_summary_merge(&overall, &firmware_subgroups[i].summary);
         }
     }
-    if (run_firmware) {
-        firmware_count = trustprobe_check_firmware(firmware_results, TRUSTPROBE_MAX_GROUP_RESULTS);
-        for (size_t i = 0; i < firmware_count; i++) {
-            trustprobe_summary_add(&firmware_summary, &firmware_results[i]);
-            trustprobe_summary_add(&overall, &firmware_results[i]);
+    if (run_physical) {
+        physical_subgroup_count = trustprobe_check_physical(
+            physical_subgroups, TRUSTPROBE_MAX_GROUP_SUBGROUPS);
+        for (size_t i = 0; i < physical_subgroup_count; i++) {
+            trustprobe_summary_merge(&physical_summary, &physical_subgroups[i].summary);
+            trustprobe_summary_merge(&overall, &physical_subgroups[i].summary);
         }
     }
 
     exit_code = overall.fail_count > 0 ? TRUSTPROBE_EXIT_FAIL : TRUSTPROBE_EXIT_OK;
 
-    if (json_output) {
-        trustprobe_group_view_t groups[2];
-        size_t group_count = 0;
+    trustprobe_group_view_t groups[2];
+    size_t group_count = 0;
 
-        if (run_physical) {
-            groups[group_count++] = (trustprobe_group_view_t){
-                .name = "physical",
-                .results = physical_results,
-                .result_count = physical_count,
-                .summary = &physical_summary,
-            };
-        }
-        if (run_firmware) {
-            groups[group_count++] = (trustprobe_group_view_t){
-                .name = "firmware",
-                .results = firmware_results,
-                .result_count = firmware_count,
-                .summary = &firmware_summary,
-            };
-        }
-
-        trustprobe_print_json(mode, banner_text(run_physical, run_firmware), groups, group_count, &overall, exit_code);
-        return exit_code;
-    }
-
-    trustprobe_log("%s", banner_text(run_physical, run_firmware));
-    putchar('\n');
-
-    if (run_physical) {
-        trustprobe_log("%s", "physical");
-        for (size_t i = 0; i < physical_count; i++) {
-            trustprobe_print_result(&physical_results[i]);
-        }
-        trustprobe_print_summary("physical", &physical_summary);
-        putchar('\n');
-    }
     if (run_firmware) {
-        trustprobe_log("%s", "firmware");
-        for (size_t i = 0; i < firmware_count; i++) {
-            trustprobe_print_result(&firmware_results[i]);
-        }
-        trustprobe_print_summary("firmware", &firmware_summary);
-        putchar('\n');
+        groups[group_count++] = (trustprobe_group_view_t){
+            .name = "firmware",
+            .subgroups = firmware_subgroups,
+            .subgroup_count = firmware_subgroup_count,
+            .summary = &firmware_summary,
+        };
+    }
+    if (run_physical) {
+        groups[group_count++] = (trustprobe_group_view_t){
+            .name = "physical",
+            .subgroups = physical_subgroups,
+            .subgroup_count = physical_subgroup_count,
+            .summary = &physical_summary,
+        };
     }
 
-    trustprobe_print_summary("overall", &overall);
-
+    trustprobe_render(render_mode, mode,
+                  banner_text(run_physical, run_firmware),
+                  groups, group_count, &overall, exit_code);
     return exit_code;
 }

@@ -5,9 +5,9 @@
 
 #include "types.h"
 
-#define TRUSTPROBE_MAX_GROUP_RESULTS 128
+#define TRUSTPROBE_MAX_GROUP_SUBGROUPS 16
 
-size_t trustprobe_check_physical(check_result_t *results, size_t max_results);
-size_t trustprobe_check_firmware(check_result_t *results, size_t max_results);
+size_t trustprobe_check_physical(check_subgroup_t *subgroups, size_t max_subgroups);
+size_t trustprobe_check_firmware(check_subgroup_t *subgroups, size_t max_subgroups);
 
 #endif

@@ -25,7 +25,7 @@ size_t trustprobe_check_me_version(check_result_t *results, size_t max_results) 
     char buf[64] = {0};
     if (!trustprobe_read_file_text(ME_FW_VERSION_PATH, buf, sizeof(buf))) {
         results[used++] = make_result("Intel ME version", CHECK_SKIP,
-            "ME version unreadable");
+            "version unreadable");
         return used;
     }
 
@@ -38,12 +38,12 @@ size_t trustprobe_check_me_version(check_result_t *results, size_t max_results) 
     unsigned int a = 0, b = 0, c = 0, d = 0;
     if (sscanf(buf, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
         results[used++] = make_result("Intel ME version", CHECK_SKIP,
-            "ME version format unrecognized");
+            "version format unrecognized");
         return used;
     }
 
     char detail[TRUSTPROBE_DETAIL_MAX];
-    snprintf(detail, sizeof(detail), "ME version %s", buf);
+    snprintf(detail, sizeof(detail), "%s; compare against Intel SA advisories", buf);
     results[used++] = make_result("Intel ME version", CHECK_OK, detail);
 
     return used;

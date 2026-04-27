@@ -26,10 +26,10 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
                 results[used++] = make_result("TPM presence", CHECK_OK, "TPM 2.0 device visible");
             } else if (trimmed[0] != '\0') {
                 char detail[128];
-                snprintf(detail, sizeof(detail), "TPM major version %s visible", trimmed);
+                snprintf(detail, sizeof(detail), "TPM %s.x device visible; expected TPM 2.0", trimmed);
                 results[used++] = make_result("TPM presence", CHECK_WARN, detail);
             } else {
-                results[used++] = make_result("TPM presence", CHECK_WARN, "TPM version not visible");
+                results[used++] = make_result("TPM presence", CHECK_WARN, "TPM device visible but version not visible");
             }
         }
     }
@@ -47,13 +47,13 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
         } else {
             int z = trustprobe_pcr_zero_check(buf, 7);
             if (z < 0) {
-                results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "PCR 7 not found in output");
+                results[used++] = make_result("TPM PCR 7", CHECK_SKIP, "not found in output");
             } else if (z == 1) {
                 results[used++] = make_result("TPM PCR 7", CHECK_WARN,
-                    "PCR 7 empty; Secure Boot state not measured into TPM");
+                    "empty; Secure Boot state not measured into TPM");
             } else {
                 results[used++] = make_result("TPM PCR 7", CHECK_OK,
-                    "PCR 7 non-zero; Secure Boot state measured");
+                    "non-zero; Secure Boot state measured");
             }
         }
     }
@@ -71,13 +71,13 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
         } else {
             int z = trustprobe_pcr_zero_check(buf, 0);
             if (z < 0) {
-                results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "PCR 0 not found in output");
+                results[used++] = make_result("TPM PCR 0", CHECK_SKIP, "not found in output");
             } else if (z == 1) {
                 results[used++] = make_result("TPM PCR 0", CHECK_WARN,
-                    "PCR 0 zero; firmware not measured at boot");
+                    "zero; firmware not measured at boot");
             } else {
                 results[used++] = make_result("TPM PCR 0", CHECK_OK,
-                    "PCR 0 non-zero; firmware measured at boot");
+                    "non-zero; firmware measured at boot");
             }
         }
     }
@@ -87,7 +87,7 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
         FILE *f = fopen(evlog, "r");
 
         if (f == NULL) {
-            results[used++] = make_result("TPM event log", CHECK_SKIP, "event log not available");
+            results[used++] = make_result("TPM event log", CHECK_SKIP, "not available");
         } else {
             char line[512];
             bool found = false;
@@ -102,7 +102,7 @@ size_t trustprobe_check_tpm(check_result_t *results, size_t max_results) {
                 results[used++] = make_result("TPM event log", CHECK_OK, "CRTM version event present");
             } else {
                 results[used++] = make_result("TPM event log", CHECK_WARN,
-                    "EV_S_CRTM_VERSION absent from event log");
+                    "EV_S_CRTM_VERSION absent");
             }
         }
     }

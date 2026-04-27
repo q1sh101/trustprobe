@@ -44,8 +44,9 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 snprintf(
                     detail,
                     sizeof(detail),
-                    "%zu LUKS-encrypted volume(s) visible",
-                    posture.luks_count
+                    "%zu LUKS-encrypted %s visible",
+                    posture.luks_count,
+                    trustprobe_pl(posture.luks_count, "volume", "volumes")
                 );
                 results[used++] = make_result("LUKS block devices", CHECK_OK, detail);
             } else if (posture.crypt_count > 0 && posture.crypt_count == posture.crypt_swap_count) {
@@ -53,8 +54,9 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 snprintf(
                     detail,
                     sizeof(detail),
-                    "%zu encrypted swap device(s) visible; %s",
+                    "%zu encrypted swap %s visible; %s",
                     posture.crypt_swap_count,
+                    trustprobe_pl(posture.crypt_swap_count, "device", "devices"),
                     "no LUKS-encrypted persistent volumes detected"
                 );
                 results[used++] = make_result("LUKS block devices", CHECK_WARN, detail);
@@ -63,8 +65,9 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 snprintf(
                     detail,
                     sizeof(detail),
-                    "%zu encrypted mapper device(s) visible; %s",
+                    "%zu encrypted mapper %s visible; %s",
                     posture.crypt_count,
+                    trustprobe_pl(posture.crypt_count, "device", "devices"),
                     "no LUKS signature detected"
                 );
                 results[used++] = make_result("LUKS block devices", CHECK_WARN, detail);
@@ -173,7 +176,8 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 /* token present but PCR field not parsed */
                 char detail[TRUSTPROBE_DETAIL_MAX];
                 snprintf(detail, sizeof(detail),
-                    "TPM2 token on %zu device(s); PCR binding unreadable", luks_found);
+                    "TPM2 token on %zu %s; PCR binding unreadable",
+                    luks_found, trustprobe_pl(luks_found, "device", "devices"));
                 results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
             } else {
                 bool has7 = (weakest_mask & PCR_BIT(7)) != 0;
@@ -199,8 +203,9 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 } else if (has0) {
                     if (luks_token_noparsed > 0) {
                         snprintf(detail, sizeof(detail),
-                            "PCRs: %s; %zu device(s) PCR binding unreadable",
-                            pcr_str, luks_token_noparsed);
+                            "PCRs: %s; %zu %s PCR binding unreadable",
+                            pcr_str, luks_token_noparsed,
+                            trustprobe_pl(luks_token_noparsed, "device", "devices"));
                         results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
                     } else {
                         snprintf(detail, sizeof(detail),
@@ -210,8 +215,9 @@ size_t trustprobe_check_luks(check_result_t *results, size_t max_results) {
                 } else {
                     if (luks_token_noparsed > 0) {
                         snprintf(detail, sizeof(detail),
-                            "PCRs: %s; %zu device(s) PCR binding unreadable",
-                            pcr_str, luks_token_noparsed);
+                            "PCRs: %s; %zu %s PCR binding unreadable",
+                            pcr_str, luks_token_noparsed,
+                            trustprobe_pl(luks_token_noparsed, "device", "devices"));
                         results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
                     } else {
                         snprintf(detail, sizeof(detail),

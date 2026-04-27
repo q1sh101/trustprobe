@@ -48,8 +48,8 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
 
     char *trimmed = trustprobe_trim(buf);
     char detail[TRUSTPROBE_DETAIL_MAX];
-    snprintf(detail, sizeof(detail), "%.160s; verify against CVE database", trimmed);
-    results[used++] = make_result("bootloader version", CHECK_WARN, detail);
+    snprintf(detail, sizeof(detail), "%.160s; no CVE comparison available", trimmed);
+    results[used++] = make_result("bootloader version", CHECK_SKIP, detail);
     return used;
 }
 
@@ -121,7 +121,7 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
     char shim_path[PATH_MAX] = {0};
     if (!find_shim(shim_path, sizeof(shim_path))) {
         results[used++] = make_result("shim signature", CHECK_SKIP,
-            "shim binary not found at /boot/efi/EFI/");
+            "shim binary not found under /boot/efi/EFI");
         return used;
     }
 
@@ -150,10 +150,10 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
 
     if (buf[0] == '\0' || strstr(lower, "no signature") != NULL) {
         results[used++] = make_result("shim signature", CHECK_FAIL,
-            "shim binary not signed");
+            "binary not signed");
     } else {
         results[used++] = make_result("shim signature", CHECK_OK,
-            "shim signature present");
+            "signature present");
     }
     return used;
 }
@@ -224,7 +224,8 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     } else {
         char detail[TRUSTPROBE_DETAIL_MAX];
         snprintf(detail, sizeof(detail),
-            "%zu initramfs file(s) root-owned and not writable", count);
+            "%zu %s root-owned and not writable",
+            count, trustprobe_pl(count, "image", "images"));
         results[used++] = make_result("initramfs permissions", CHECK_OK, detail);
     }
     return used;
@@ -245,16 +246,16 @@ static size_t check_sbat_revocations(check_result_t *results, size_t max_results
 
     if (!trustprobe_capture_argv_status(sbat_argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0) {
-        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil --sbat failed");
+        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil SBAT query failed");
         return used;
     }
 
     if (!trustprobe_sbat_entries_present(trustprobe_trim(buf))) {
         results[used++] = make_result("SBAT revocations", CHECK_WARN,
-            "no SBAT revocation entries applied");
+            "no revocation entries applied");
     } else {
         results[used++] = make_result("SBAT revocations", CHECK_OK,
-            "SBAT revocation entries present");
+            "revocation entries present");
     }
     return used;
 }

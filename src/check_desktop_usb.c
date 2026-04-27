@@ -42,7 +42,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
             results[used++] = make_result("usbguard-dbus masked", CHECK_WARN, "systemctl not available");
         } else if (trustprobe_capture_argv_status(usbguard_dbus_enabled_argv, buffer, sizeof(buffer), &exit_status)) {
             if (strstr(buffer, "masked") != NULL) {
-                results[used++] = make_result("usbguard-dbus masked", CHECK_OK, "desktop D-Bus bridge masked");
+                results[used++] = make_result("usbguard-dbus masked", CHECK_OK, "D-Bus bridge disabled at socket level");
             } else if (strstr(buffer, "disabled") != NULL) {
                 results[used++] = make_result("usbguard-dbus masked", CHECK_FAIL, "disabled but not masked");
             } else if (exit_status == 0) {
@@ -74,7 +74,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
          * Missing them weakens the boundary, but does not override USBGuard's primary deny path by itself.
          */
         if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_USB_PROTECTION_KEY, "false")) {
-            results[used++] = make_result("GNOME USB protection", CHECK_OK, "usb-protection disabled");
+            results[used++] = make_result("GNOME USB protection", CHECK_OK, "usb-protection deferred to USBGuard");
         } else {
             results[used++] = make_result("GNOME USB protection", CHECK_WARN, "usb-protection=false not found");
         }
@@ -83,7 +83,7 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
     if (policy_readable && used < max_results) {
         if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_AUTOMOUNT_KEY, "false") &&
             dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_AUTOMOUNT_OPEN_KEY, "false")) {
-            results[used++] = make_result("automount disabled", CHECK_OK, "automount and automount-open disabled");
+            results[used++] = make_result("automount disabled", CHECK_OK, "automount-open also disabled");
         } else {
             results[used++] = make_result("automount disabled", CHECK_WARN, "missing automount hardening keys");
         }
@@ -99,9 +99,9 @@ size_t trustprobe_check_desktop_usb(check_result_t *results, size_t max_results)
 
     if (policy_readable && used < max_results) {
         if (dconf_value_matches(dconf_policy, TRUSTPROBE_DCONF_READ_ONLY_MEDIA_KEY, "true")) {
-            results[used++] = make_result("removable media lockdown", CHECK_OK, "read-only removable media enforced");
+            results[used++] = make_result("removable media lockdown", CHECK_OK, "read-only enforced");
         } else {
-            results[used++] = make_result("removable media lockdown", CHECK_WARN, "read-only removable media lockdown not found");
+            results[used++] = make_result("removable media lockdown", CHECK_WARN, "read-only enforcement not found");
         }
     }
 

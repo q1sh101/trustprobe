@@ -23,7 +23,7 @@ size_t trustprobe_check_microcode(check_result_t *results, size_t max_results) {
             snprintf(detail, sizeof(detail), "loaded revision %s", revision);
             results[used++] = make_result("CPU microcode", CHECK_OK, detail);
         } else {
-            results[used++] = make_result("CPU microcode", CHECK_WARN, "microcode revision not visible");
+            results[used++] = make_result("CPU microcode", CHECK_WARN, "revision not visible");
         }
     }
 

@@ -32,7 +32,7 @@ size_t trustprobe_check_usbguard_policy(check_result_t *results, size_t max_resu
                     "USB authorization: internal devices only");
             } else {
                 results[used++] = make_result("usbcore authorized default", CHECK_WARN,
-                    "usbcore.authorized_default=1; devices authorized before usbguard starts");
+                    "kernel param authorized_default=1: USB devices authorized before usbguard starts");
             }
         }
     }

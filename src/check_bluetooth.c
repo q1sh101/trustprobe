@@ -29,10 +29,10 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
 
     if (used < max_results) {
         if (!bluetooth_hardware_visible()) {
-            results[used++] = make_result("Bluetooth hardware", CHECK_SKIP, "no Bluetooth hardware visible");
+            results[used++] = make_result("Bluetooth hardware", CHECK_SKIP, "adapter not detected");
             return used;
         }
-        results[used++] = make_result("Bluetooth hardware", CHECK_OK, "Bluetooth hardware present");
+        results[used++] = make_result("Bluetooth hardware", CHECK_OK, "adapter detected");
     }
 
     bool service_active = false;
@@ -43,13 +43,13 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
             break;
         case TRUSTPROBE_SERVICE_STATE_ACTIVE:
             service_active = true;
-            results[used++] = make_result("Bluetooth service", CHECK_OK, "service is running");
+            results[used++] = make_result("Bluetooth service", CHECK_OK, "running");
             break;
         case TRUSTPROBE_SERVICE_STATE_INACTIVE:
-            results[used++] = make_result("Bluetooth service", CHECK_OK, "service is inactive");
+            results[used++] = make_result("Bluetooth service", CHECK_OK, "installed but inactive");
             break;
         case TRUSTPROBE_SERVICE_STATE_MISSING:
-            results[used++] = make_result("Bluetooth service", CHECK_SKIP, "service not installed");
+            results[used++] = make_result("Bluetooth service", CHECK_SKIP, "not installed");
             break;
         default:
             results[used++] = make_result("Bluetooth service", CHECK_SKIP, "state unavailable");
@@ -72,9 +72,9 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
         if (!btctl_ok) {
             results[used++] = make_result("Bluetooth discoverable", CHECK_SKIP, "bluetoothctl not available");
         } else if (strstr(output, "Discoverable: yes") != NULL) {
-            results[used++] = make_result("Bluetooth discoverable", CHECK_FAIL, "adapter is discoverable");
+            results[used++] = make_result("Bluetooth discoverable", CHECK_FAIL, "adapter advertising presence");
         } else {
-            results[used++] = make_result("Bluetooth discoverable", CHECK_OK, "not discoverable");
+            results[used++] = make_result("Bluetooth discoverable", CHECK_OK, "not advertising presence");
         }
     }
 
@@ -82,9 +82,9 @@ size_t trustprobe_check_bluetooth(check_result_t *results, size_t max_results) {
         if (!btctl_ok) {
             results[used++] = make_result("Bluetooth pairable", CHECK_SKIP, "bluetoothctl not available");
         } else if (strstr(output, "Pairable: yes") != NULL) {
-            results[used++] = make_result("Bluetooth pairable", CHECK_WARN, "adapter is pairable");
+            results[used++] = make_result("Bluetooth pairable", CHECK_WARN, "accepting new pairings");
         } else {
-            results[used++] = make_result("Bluetooth pairable", CHECK_OK, "not pairable");
+            results[used++] = make_result("Bluetooth pairable", CHECK_OK, "not accepting new pairings");
         }
     }
 

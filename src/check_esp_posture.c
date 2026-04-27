@@ -32,18 +32,18 @@ static size_t check_esp_permissions(check_result_t *results, size_t max_results)
 
     if (stat("/boot/efi", &st) != 0) {
         results[used++] = make_result("ESP mount", CHECK_SKIP,
-            "ESP not mounted at /boot/efi");
+            "not accessible at /boot/efi");
         return used;
     }
     if (st.st_uid != 0) {
         results[used++] = make_result("ESP ownership", CHECK_WARN,
-            "ESP not owned by root");
+            "not owned by root");
     } else if ((st.st_mode & (mode_t)0022) != 0) {
         results[used++] = make_result("ESP ownership", CHECK_WARN,
-            "ESP world/group-writable");
+            "world/group-writable");
     } else {
         results[used++] = make_result("ESP ownership", CHECK_OK,
-            "ESP root-owned and not world-writable");
+            "root-owned and not world-writable");
     }
     return used;
 }
@@ -80,14 +80,15 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
 
     if (total == 0) {
         results[used++] = make_result("EFI vendor directories", CHECK_WARN,
-            "EFI directory contains no vendor dirs");
+            "no vendor directories found");
     } else if (unexpected[0] != '\0') {
         char detail[TRUSTPROBE_DETAIL_MAX];
-        snprintf(detail, sizeof(detail), "unrecognized EFI vendor dir: %s", unexpected);
+        snprintf(detail, sizeof(detail), "unrecognized vendor: %s", unexpected);
         results[used++] = make_result("EFI vendor directories", CHECK_WARN, detail);
     } else {
         char detail[TRUSTPROBE_DETAIL_MAX];
-        snprintf(detail, sizeof(detail), "%zu vendor dir(s); all recognized", total);
+        snprintf(detail, sizeof(detail), "%zu vendor %s",
+            total, trustprobe_pl(total, "directory; recognized", "directories; all recognized"));
         results[used++] = make_result("EFI vendor directories", CHECK_OK, detail);
     }
     return used;
@@ -188,7 +189,7 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
     DIR *dir = opendir("/boot/efi/EFI/UpdateCapsule");
     if (dir == NULL) {
         results[used++] = make_result("ESP UpdateCapsule", CHECK_SKIP,
-            "UpdateCapsule directory absent");
+            "directory absent");
         return used;
     }
 
@@ -201,11 +202,12 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
 
     if (count == 0) {
         results[used++] = make_result("ESP UpdateCapsule", CHECK_OK,
-            "UpdateCapsule directory empty");
+            "directory empty");
     } else {
         char detail[TRUSTPROBE_DETAIL_MAX];
         snprintf(detail, sizeof(detail),
-            "%zu file(s) in UpdateCapsule; firmware will apply on next reboot", count);
+            "%zu %s pending; firmware will apply on next reboot",
+            count, trustprobe_pl(count, "file", "files"));
         results[used++] = make_result("ESP UpdateCapsule", CHECK_WARN, detail);
     }
     return used;

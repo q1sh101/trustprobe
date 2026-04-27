@@ -38,18 +38,15 @@ static void check_sigdb_variable(const char *path, const char *name,
     unsigned char buf[32];
     size_t len = 0;
     if (!trustprobe_read_file_binary(path, buf, sizeof(buf), &len)) {
-        results[(*used)++] = make_result(name, CHECK_WARN,
-            "variable visible but unreadable");
+        results[(*used)++] = make_result(name, CHECK_WARN, "variable unreadable");
         return;
     }
 
     trustprobe_efi_sigdb_status_t status = trustprobe_classify_efi_sigdb(buf, len);
     if (status == TRUSTPROBE_EFI_SIGDB_NONEMPTY) {
-        results[(*used)++] = make_result(name, CHECK_OK,
-            "visible and non-empty");
+        results[(*used)++] = make_result(name, CHECK_OK, "visible and non-empty");
     } else {
-        results[(*used)++] = make_result(name, CHECK_WARN,
-            "visible but empty");
+        results[(*used)++] = make_result(name, CHECK_WARN, "visible but empty");
     }
 }
 
@@ -73,7 +70,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         if (!has_mokutil) {
             results[used++] = make_result("secure boot state", CHECK_SKIP, "mokutil not installed");
         } else if (!trustprobe_capture_argv_status(mokutil_state_argv, state_buffer, sizeof(state_buffer), &sb_exit) || sb_exit != 0) {
-            results[used++] = make_result("secure boot state", CHECK_WARN, "unable to read Secure Boot state");
+            results[used++] = make_result("secure boot state", CHECK_WARN, "unable to query");
         /* Disabled Secure Boot is a direct posture regression for this layer, so keep it as FAIL. */
         } else if ((state = trustprobe_parse_secure_boot_state(state_buffer)) == TRUSTPROBE_SECURE_BOOT_ENABLED) {
             have_state_output = true;
@@ -83,7 +80,7 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
             results[used++] = make_result("secure boot state", CHECK_FAIL, "Secure Boot disabled");
         } else {
             have_state_output = true;
-            results[used++] = make_result("secure boot state", CHECK_WARN, "unexpected mokutil output");
+            results[used++] = make_result("secure boot state", CHECK_WARN, "mokutil output not recognized");
         }
     }
 
@@ -91,11 +88,11 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         if (!has_mokutil) {
             results[used++] = make_result("secure boot setup mode", CHECK_SKIP, "mokutil not installed");
         } else if (!have_state_output) {
-            results[used++] = make_result("secure boot setup mode", CHECK_SKIP, "setup mode unavailable");
+            results[used++] = make_result("secure boot setup mode", CHECK_SKIP, "unavailable");
         } else if (trustprobe_secure_boot_setup_mode(state_buffer)) {
-            results[used++] = make_result("secure boot setup mode", CHECK_WARN, "Setup Mode enabled");
+            results[used++] = make_result("secure boot setup mode", CHECK_WARN, "enabled");
         } else {
-            results[used++] = make_result("secure boot setup mode", CHECK_OK, "Setup Mode disabled");
+            results[used++] = make_result("secure boot setup mode", CHECK_OK, "disabled");
         }
     }
 
@@ -103,11 +100,11 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         if (!has_mokutil) {
             results[used++] = make_result("platform key owner", CHECK_SKIP, "mokutil not installed");
         } else if (!ownership.owner_readable) {
-            results[used++] = make_result("platform key owner", CHECK_SKIP, "platform key owner unreadable");
+            results[used++] = make_result("platform key owner", CHECK_SKIP, "owner unreadable");
         } else if (ownership.owner_parsed) {
             results[used++] = make_result("platform key owner", CHECK_OK, ownership.owner);
         } else {
-            results[used++] = make_result("platform key owner", CHECK_SKIP, "platform key owner not parsed");
+            results[used++] = make_result("platform key owner", CHECK_SKIP, "owner not parsed");
         }
     }
 
@@ -119,9 +116,10 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
         } else {
             char detail[128];
             if (ownership.enrollment_count == 0) {
-                results[used++] = make_result("MOK enrollments", CHECK_OK, "no local MOK enrollments visible");
+                results[used++] = make_result("MOK enrollments", CHECK_OK, "none enrolled");
             } else {
-                snprintf(detail, sizeof(detail), "%zu local MOK enrollment(s) visible", ownership.enrollment_count);
+                snprintf(detail, sizeof(detail), "%zu enrolled",
+                    ownership.enrollment_count);
                 results[used++] = make_result("MOK enrollments", CHECK_OK, detail);
             }
         }
@@ -151,11 +149,11 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
                 char detail[TRUSTPROBE_DETAIL_MAX];
                 if (payload < 100) {
                     snprintf(detail, sizeof(detail),
-                        "dbx minimal (%zu bytes); may be factory default", payload);
+                        "minimal (%zu bytes); may be factory default", payload);
                     results[used++] = make_result("Secure Boot dbx size", CHECK_WARN, detail);
                 } else {
                     snprintf(detail, sizeof(detail),
-                        "dbx non-minimal (%zu bytes); currency unverified", payload);
+                        "non-minimal (%zu bytes); currency unverified", payload);
                     results[used++] = make_result("Secure Boot dbx size", CHECK_OK, detail);
                 }
             }
@@ -176,11 +174,12 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
                 size_t lists = trustprobe_count_efi_sigdb_lists(db_buf, db_len);
                 if (lists == 0) {
                     results[used++] = make_result("Secure Boot db keys", CHECK_WARN,
-                        "db empty; Secure Boot allowlist missing");
+                        "empty; Secure Boot allowlist missing");
                 } else {
                     char detail[TRUSTPROBE_DETAIL_MAX];
                     snprintf(detail, sizeof(detail),
-                        "%zu key list(s) in Secure Boot allowlist", lists);
+                        "%zu key %s in Secure Boot allowlist",
+                        lists, trustprobe_pl(lists, "list", "lists"));
                     results[used++] = make_result("Secure Boot db keys", CHECK_OK, detail);
                 }
             }
@@ -252,10 +251,10 @@ size_t trustprobe_check_secureboot(check_result_t *results, size_t max_results) 
                 if (strncmp(opts, "ro,", 3) == 0 || strncmp(opts, "ro\n", 3) == 0 ||
                     strncmp(opts, "ro ", 3) == 0 || strncmp(opts, "ro\0", 3) == 0) {
                     results[used++] = make_result("efivarfs mount mode", CHECK_OK,
-                        "efivarfs mounted read-only");
+                        "read-only");
                 } else {
                     results[used++] = make_result("efivarfs mount mode", CHECK_WARN,
-                        "efivarfs mounted read-write; Secure Boot variables writable");
+                        "read-write; Secure Boot variables writable");
                 }
             }
         }
