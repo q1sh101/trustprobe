@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "efi_boot_parsers.h"
 #include "runtime.h"
 
@@ -79,67 +80,48 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
         }
     }
 
-    if (used < max_results) {
-        if (usb_in_order) {
-            results[used++] = make_result("EFI USB boot",
-                CHECK_WARN, "active entry in EFI boot order");
-        } else {
-            results[used++] = make_result("EFI USB boot",
-                CHECK_OK, "no active entry in EFI boot order");
-        }
+    if (usb_in_order) {
+        EMIT("EFI USB boot", CHECK_WARN, "active entry in EFI boot order");
+    } else {
+        EMIT("EFI USB boot", CHECK_OK, "no active entry in EFI boot order");
     }
 
-    if (used < max_results) {
-        if (net_in_order) {
-            results[used++] = make_result("EFI network boot",
-                CHECK_WARN, "active entry in EFI boot order");
-        } else {
-            results[used++] = make_result("EFI network boot",
-                CHECK_OK, "no active entry in EFI boot order");
-        }
+    if (net_in_order) {
+        EMIT("EFI network boot", CHECK_WARN, "active entry in EFI boot order");
+    } else {
+        EMIT("EFI network boot", CHECK_OK, "no active entry in EFI boot order");
     }
 
-    if (used < max_results) {
-        if (cd_in_order) {
-            results[used++] = make_result("EFI CD/DVD boot",
-                CHECK_WARN, "active entry in EFI boot order");
-        } else {
-            results[used++] = make_result("EFI CD/DVD boot",
-                CHECK_OK, "no active entry in EFI boot order");
-        }
+    if (cd_in_order) {
+        EMIT("EFI CD/DVD boot", CHECK_WARN, "active entry in EFI boot order");
+    } else {
+        EMIT("EFI CD/DVD boot", CHECK_OK, "no active entry in EFI boot order");
     }
 
     /* BootNext: one-shot override for the next reboot */
-    if (used < max_results) {
+    {
         unsigned char next_buf[16];
         size_t next_len = 0;
         uint16_t next_number = 0;
 
         if (!bythos_file_exists(EFI_BOOT_NEXT_PATH)) {
-            results[used++] = make_result("EFI one-shot boot",
-                CHECK_OK, "no boot override pending");
+            EMIT("EFI one-shot boot", CHECK_OK, "no boot override pending");
         } else if (!bythos_read_file_binary(EFI_BOOT_NEXT_PATH, next_buf,
                                                  sizeof(next_buf), &next_len) ||
                    !bythos_parse_efi_boot_next(next_buf, next_len, &next_number)) {
-            results[used++] = make_result("EFI one-shot boot",
-                CHECK_WARN, "BootNext variable present but unreadable");
+            EMIT("EFI one-shot boot", CHECK_WARN, "BootNext variable present but unreadable");
         } else {
             bythos_efi_boot_entry_t next_entry = {0};
             if (!read_boot_entry(next_number, &next_entry)) {
-                results[used++] = make_result("EFI one-shot boot",
-                    CHECK_WARN, "BootNext points to unreadable entry");
+                EMIT("EFI one-shot boot", CHECK_WARN, "BootNext points to unreadable entry");
             } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_USB) {
-                results[used++] = make_result("EFI one-shot boot",
-                    CHECK_WARN, "BootNext overrides to USB boot");
+                EMIT("EFI one-shot boot", CHECK_WARN, "BootNext overrides to USB boot");
             } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_NETWORK) {
-                results[used++] = make_result("EFI one-shot boot",
-                    CHECK_WARN, "BootNext overrides to network boot");
+                EMIT("EFI one-shot boot", CHECK_WARN, "BootNext overrides to network boot");
             } else if (next_entry.type == BYTHOS_EFI_BOOT_TYPE_CD) {
-                results[used++] = make_result("EFI one-shot boot",
-                    CHECK_WARN, "BootNext overrides to CD/DVD boot");
+                EMIT("EFI one-shot boot", CHECK_WARN, "BootNext overrides to CD/DVD boot");
             } else {
-                results[used++] = make_result("EFI one-shot boot",
-                    CHECK_OK, "BootNext does not point to USB, network, or optical boot");
+                EMIT("EFI one-shot boot", CHECK_OK, "BootNext does not point to USB, network, or optical boot");
             }
         }
     }
@@ -149,16 +131,7 @@ static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
 
 static bool name_matches_usb_boot(const char *name) {
     char lower[256];
-    size_t len = strlen(name);
-    if (len >= sizeof(lower)) {
-        len = sizeof(lower) - 1;
-    }
-
-    for (size_t i = 0; i < len; i++) {
-        lower[i] = (char)tolower((unsigned char)name[i]);
-    }
-    lower[len] = '\0';
-
+    bythos_to_lower_ascii(name, lower, sizeof(lower));
     return strstr(lower, "usb") != NULL && strstr(lower, "boot") != NULL;
 }
 
@@ -236,14 +209,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     }
 
     char lower_value[64];
-    size_t vlen = strlen(value);
-    if (vlen >= sizeof(lower_value)) {
-        vlen = sizeof(lower_value) - 1;
-    }
-    for (size_t i = 0; i < vlen; i++) {
-        lower_value[i] = (char)tolower((unsigned char)value[i]);
-    }
-    lower_value[vlen] = '\0';
+    bythos_to_lower_ascii(value, lower_value, sizeof(lower_value));
 
     if (strstr(lower_value, "disable") != NULL) {
         results[used++] = make_result("BIOS USB boot", CHECK_OK, "disabled via firmware-attributes");

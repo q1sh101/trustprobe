@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
 
@@ -43,7 +44,7 @@ size_t bythos_check_me_version(check_result_t *results, size_t max_results) {
     }
 
     char detail[BYTHOS_DETAIL_MAX];
-    snprintf(detail, sizeof(detail), "%s; compare against Intel SA advisories", buf);
+    snprintf(detail, sizeof(detail), "%u.%u.%u.%u; compare against Intel SA advisories", a, b, c, d);
     results[used++] = make_result("Intel ME version", CHECK_OK, detail);
 
     return used;

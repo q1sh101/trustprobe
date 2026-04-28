@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
 

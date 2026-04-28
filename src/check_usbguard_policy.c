@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 
 typedef struct {
@@ -15,23 +16,23 @@ typedef struct {
 size_t bythos_check_usbguard_policy(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    if (used < max_results) {
+    {
         char val[16] = {0};
         if (!bythos_read_file_text(
                 "/sys/module/usbcore/parameters/authorized_default",
                 val, sizeof(val))) {
-            results[used++] = make_result("usbcore authorized default", CHECK_SKIP,
+            EMIT("usbcore authorized default", CHECK_SKIP,
                 "parameter not readable");
         } else {
             char *trimmed = bythos_trim(val);
             if (strcmp(trimmed, "0") == 0) {
-                results[used++] = make_result("usbcore authorized default", CHECK_OK,
+                EMIT("usbcore authorized default", CHECK_OK,
                     "USB devices denied by default until authorized");
             } else if (strcmp(trimmed, "2") == 0) {
-                results[used++] = make_result("usbcore authorized default", CHECK_OK,
+                EMIT("usbcore authorized default", CHECK_OK,
                     "USB authorization: internal devices only");
             } else {
-                results[used++] = make_result("usbcore authorized default", CHECK_WARN,
+                EMIT("usbcore authorized default", CHECK_WARN,
                     "kernel param authorized_default=1: USB devices authorized before usbguard starts");
             }
         }
@@ -51,9 +52,7 @@ size_t bythos_check_usbguard_policy(check_result_t *results, size_t max_results)
     const char *path = "/etc/usbguard/usbguard-daemon.conf";
     FILE *probe = fopen(path, "r");
     if (probe == NULL && errno == ENOENT) {
-        if (used < max_results) {
-            results[used++] = make_result("usbguard daemon policy", CHECK_FAIL, "usbguard-daemon.conf not found");
-        }
+        EMIT("usbguard daemon policy", CHECK_FAIL, "usbguard-daemon.conf not found");
         return used;
     }
 

@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -14,6 +15,26 @@
 #include <unistd.h>
 
 #include "runtime.h"
+
+#define BYTHOS_CMD_TIMEOUT_SEC 10
+
+static volatile sig_atomic_t bythos_alarm_fired = 0;
+
+static void bythos_on_alarm(int sig) {
+    (void)sig;
+    bythos_alarm_fired = 1;
+}
+
+void bythos_to_lower_ascii(const char *src, char *dst, size_t dst_size) {
+    if (src == NULL || dst == NULL || dst_size == 0) {
+        return;
+    }
+    size_t i = 0;
+    for (; src[i] != '\0' && i + 1 < dst_size; i++) {
+        dst[i] = (char)tolower((unsigned char)src[i]);
+    }
+    dst[i] = '\0';
+}
 
 char *bythos_trim(char *text) {
     if (text == NULL) {
@@ -270,11 +291,19 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
         }
         close(pipefd[1]);
 
+        setenv("LC_ALL", "C", 1);
         execvp(argv[0], (char *const *)argv);
         _exit(errno == ENOENT ? 127 : 126);
     }
 
     close(pipefd[1]);
+
+    struct sigaction sa = {0};
+    struct sigaction old_sa;
+    sa.sa_handler = bythos_on_alarm;
+    sigaction(SIGALRM, &sa, &old_sa);
+    bythos_alarm_fired = 0;
+    alarm(BYTHOS_CMD_TIMEOUT_SEC);
 
     buffer[0] = '\0';
     size_t used = 0;
@@ -293,7 +322,17 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
         }
     }
 
+    bool timed_out = bythos_alarm_fired;
+    alarm(0);
+    sigaction(SIGALRM, &old_sa, NULL);
+
     close(pipefd[0]);
+
+    if (timed_out) {
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, 0);
+        return false;
+    }
 
     int status = 0;
     if (waitpid(pid, &status, 0) < 0) {
@@ -336,6 +375,7 @@ int bythos_run_argv_quiet(const char *const argv[]) {
         }
 
         close(devnull);
+        setenv("LC_ALL", "C", 1);
         execvp(argv[0], (char *const *)argv);
         _exit(errno == ENOENT ? 127 : 126);
     }
@@ -385,4 +425,20 @@ bythos_service_state_t bythos_probe_systemd_service(const char *unit) {
     }
 
     return BYTHOS_SERVICE_STATE_INACTIVE;
+}
+
+const char *bythos_esp_efi_base(void) {
+    static const char *cached = NULL;
+    if (cached != NULL) {
+        return cached;
+    }
+    static const char *const candidates[] = {"/boot/efi/EFI", "/efi/EFI"};
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+        if (bythos_file_exists(candidates[i])) {
+            cached = candidates[i];
+            return cached;
+        }
+    }
+    cached = candidates[0];
+    return cached;
 }

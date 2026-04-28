@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 
 static const char *const SERIAL_GETTY_UNITS[] = {
@@ -25,15 +26,13 @@ static bool cmdline_has_serial_console(void) {
 size_t bythos_check_serial_console(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    if (used < max_results) {
-        if (cmdline_has_serial_console()) {
-            results[used++] = make_result("serial kernel console", CHECK_WARN, "active in kernel cmdline");
-        } else {
-            results[used++] = make_result("serial kernel console", CHECK_OK, "absent from kernel cmdline");
-        }
+    if (cmdline_has_serial_console()) {
+        EMIT("serial kernel console", CHECK_WARN, "active in kernel cmdline");
+    } else {
+        EMIT("serial kernel console", CHECK_OK, "absent from kernel cmdline");
     }
 
-    if (used < max_results) {
+    {
         const char *active_unit = NULL;
         bool any_present = false;
         bool systemctl_unavailable = false;
@@ -58,15 +57,15 @@ size_t bythos_check_serial_console(check_result_t *results, size_t max_results) 
         }
 
         if (systemctl_unavailable && !any_present && active_unit == NULL) {
-            results[used++] = make_result("serial getty service", CHECK_SKIP, "systemctl not available");
+            EMIT("serial getty service", CHECK_SKIP, "systemctl not available");
         } else if (active_unit != NULL) {
             char detail[BYTHOS_DETAIL_MAX];
             snprintf(detail, sizeof(detail), "%s is active", active_unit);
-            results[used++] = make_result("serial getty service", CHECK_WARN, detail);
+            EMIT("serial getty service", CHECK_WARN, detail);
         } else if (any_present) {
-            results[used++] = make_result("serial getty service", CHECK_OK, "none active");
+            EMIT("serial getty service", CHECK_OK, "none active");
         } else {
-            results[used++] = make_result("serial getty service", CHECK_SKIP, "none present");
+            EMIT("serial getty service", CHECK_SKIP, "none present");
         }
     }
 

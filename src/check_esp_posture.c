@@ -2,14 +2,14 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "esp_parsers.h"
 #include "runtime.h"
-
-static const char *const ESP_EFI_BASE = "/boot/efi/EFI";
 
 static size_t check_esp_permissions(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -30,9 +30,9 @@ static size_t check_esp_permissions(check_result_t *results, size_t max_results)
 
     if (used >= max_results) return used;
 
-    if (stat("/boot/efi", &st) != 0) {
+    if (stat("/boot/efi", &st) != 0 && stat("/efi", &st) != 0) {
         results[used++] = make_result("ESP mount", CHECK_SKIP,
-            "not accessible at /boot/efi");
+            "not accessible at /boot/efi or /efi");
         return used;
     }
     if (st.st_uid != 0) {
@@ -52,7 +52,8 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
     size_t used = 0;
     if (used >= max_results) return used;
 
-    DIR *dir = opendir(ESP_EFI_BASE);
+    const char *esp_base = bythos_esp_efi_base();
+    DIR *dir = opendir(esp_base);
     if (dir == NULL) {
         results[used++] = make_result("EFI vendor directories", CHECK_SKIP,
             "EFI directory not accessible");
@@ -66,7 +67,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_name[0] == '.') continue;
         char path[PATH_MAX];
-        if (snprintf(path, sizeof(path), "%s/%s", ESP_EFI_BASE, entry->d_name) >=
+        if (snprintf(path, sizeof(path), "%s/%s", esp_base, entry->d_name) >=
             (int)sizeof(path)) continue;
         struct stat st;
         /* FAT32 d_type is often DT_UNKNOWN; use stat to confirm directory */
@@ -95,7 +96,8 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
 }
 
 static bool find_shim(char *path_out, size_t size) {
-    DIR *efi_dir = opendir(ESP_EFI_BASE);
+    const char *esp_base = bythos_esp_efi_base();
+    DIR *efi_dir = opendir(esp_base);
     if (efi_dir == NULL) return false;
     bool found = false;
     struct dirent *vendor;
@@ -103,7 +105,7 @@ static bool find_shim(char *path_out, size_t size) {
         if (vendor->d_name[0] == '.') continue;
         char candidate[PATH_MAX];
         if (snprintf(candidate, sizeof(candidate), "%s/%s/shimx64.efi",
-                     ESP_EFI_BASE, vendor->d_name) >= (int)sizeof(candidate)) continue;
+                     esp_base, vendor->d_name) >= (int)sizeof(candidate)) continue;
         if (bythos_file_exists(candidate)) {
             snprintf(path_out, size, "%s", candidate);
             found = true;
@@ -118,8 +120,10 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     /* UEFI fallback path used by attackers to persist across BootOrder resets */
-    const char *upper = "/boot/efi/EFI/BOOT/BOOTX64.EFI";
-    const char *lower = "/boot/efi/EFI/BOOT/bootx64.efi";
+    const char *esp_base = bythos_esp_efi_base();
+    char upper[PATH_MAX], lower[PATH_MAX];
+    snprintf(upper, sizeof(upper), "%s/BOOT/BOOTX64.EFI", esp_base);
+    snprintf(lower, sizeof(lower), "%s/BOOT/bootx64.efi", esp_base);
     const char *bootx64 = bythos_file_exists(upper) ? upper :
                           bythos_file_exists(lower) ? lower : NULL;
 
@@ -186,7 +190,9 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
     size_t used = 0;
     if (used >= max_results) return used;
 
-    DIR *dir = opendir("/boot/efi/EFI/UpdateCapsule");
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/UpdateCapsule", bythos_esp_efi_base());
+    DIR *dir = opendir(path);
     if (dir == NULL) {
         results[used++] = make_result("ESP UpdateCapsule", CHECK_SKIP,
             "directory absent");

@@ -1,4 +1,3 @@
-#include <ctype.h>
 #include <dirent.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -8,6 +7,7 @@
 #include <sys/stat.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "firmware_parsers.h"
 #include "runtime.h"
 
@@ -54,7 +54,7 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
 }
 
 static bool find_shim(char *path_out, size_t path_out_size) {
-    const char *base = "/boot/efi/EFI";
+    const char *base = bythos_esp_efi_base();
     DIR *efi_dir = opendir(base);
     if (efi_dir == NULL) {
         return false;
@@ -81,16 +81,8 @@ static bool find_shim(char *path_out, size_t path_out_size) {
 
         struct dirent *entry;
         while ((entry = readdir(vendor_dir)) != NULL) {
-            size_t nlen = strlen(entry->d_name);
-            if (nlen >= 64) {
-                continue;
-            }
-
-            char lower[64] = {0};
-            for (size_t i = 0; i < nlen; i++) {
-                lower[i] = (char)tolower((unsigned char)entry->d_name[i]);
-            }
-            lower[nlen] = '\0';
+            char lower[256];
+            bythos_to_lower_ascii(entry->d_name, lower, sizeof(lower));
 
             if (strcmp(lower, "shimx64.efi") != 0) {
                 continue;
@@ -121,7 +113,7 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
     char shim_path[PATH_MAX] = {0};
     if (!find_shim(shim_path, sizeof(shim_path))) {
         results[used++] = make_result("shim signature", CHECK_SKIP,
-            "shim binary not found under /boot/efi/EFI");
+            "shim binary not found on ESP");
         return used;
     }
 
@@ -143,10 +135,8 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
         return used;
     }
 
-    char lower[2048] = {0};
-    for (size_t i = 0; i < sizeof(buf) - 1 && buf[i] != '\0'; i++) {
-        lower[i] = (char)tolower((unsigned char)buf[i]);
-    }
+    char lower[2048];
+    bythos_to_lower_ascii(buf, lower, sizeof(lower));
 
     if (buf[0] == '\0' || strstr(lower, "no signature") != NULL) {
         results[used++] = make_result("shim signature", CHECK_FAIL,

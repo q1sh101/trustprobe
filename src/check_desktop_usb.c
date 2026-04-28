@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 
 static const char *const BYTHOS_DCONF_POLICY_PATH = "/etc/dconf/db/local.d/00-usb-hardening";
@@ -35,82 +36,80 @@ size_t bythos_check_desktop_usb(check_result_t *results, size_t max_results) {
 
     has_systemctl = bythos_command_exists("systemctl");
 
-    if (used < max_results) {
+    {
         char buffer[128] = {0};
         int exit_status = 0;
         if (!has_systemctl) {
-            results[used++] = make_result("usbguard-dbus masked", CHECK_WARN, "systemctl not available");
+            EMIT("usbguard-dbus masked", CHECK_WARN, "systemctl not available");
         } else if (bythos_capture_argv_status(usbguard_dbus_enabled_argv, buffer, sizeof(buffer), &exit_status)) {
             if (strstr(buffer, "masked") != NULL) {
-                results[used++] = make_result("usbguard-dbus masked", CHECK_OK, "D-Bus bridge disabled at socket level");
+                EMIT("usbguard-dbus masked", CHECK_OK, "D-Bus bridge disabled at socket level");
             } else if (strstr(buffer, "disabled") != NULL) {
-                results[used++] = make_result("usbguard-dbus masked", CHECK_FAIL, "disabled but not masked");
+                EMIT("usbguard-dbus masked", CHECK_FAIL, "disabled but not masked");
             } else if (exit_status == 0) {
-                results[used++] = make_result("usbguard-dbus masked", CHECK_FAIL, "service is enabled");
+                EMIT("usbguard-dbus masked", CHECK_FAIL, "service is enabled");
             } else {
-                results[used++] = make_result("usbguard-dbus masked", CHECK_WARN, "unexpected unit state");
+                EMIT("usbguard-dbus masked", CHECK_WARN, "unexpected unit state");
             }
         } else {
-            results[used++] = make_result("usbguard-dbus masked", CHECK_WARN, "unable to read unit state");
+            EMIT("usbguard-dbus masked", CHECK_WARN, "unable to read unit state");
         }
     }
 
-    if (used < max_results) {
+    {
         FILE *probe = fopen(dconf_policy, "r");
         if (probe != NULL) {
             fclose(probe);
             policy_readable = true;
-            results[used++] = make_result("GNOME USB policy file", CHECK_OK, "dconf policy file found");
+            EMIT("GNOME USB policy file", CHECK_OK, "dconf policy file found");
         } else if (errno == ENOENT) {
-            results[used++] = make_result("GNOME USB policy file", CHECK_WARN, "dconf policy file not found");
+            EMIT("GNOME USB policy file", CHECK_WARN, "dconf policy file not found");
         } else {
-            results[used++] = make_root_result("GNOME USB policy file", CHECK_SKIP, "dconf policy file not readable");
+            EMIT_ROOT("GNOME USB policy file", CHECK_SKIP, "dconf policy file not readable");
         }
     }
 
-    if (policy_readable && used < max_results) {
+    if (policy_readable) {
         /*
          * These dconf keys are desktop-side guardrails around removable media behavior.
          * Missing them weakens the boundary, but does not override USBGuard's primary deny path by itself.
          */
         if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_USB_PROTECTION_KEY, "false")) {
-            results[used++] = make_result("GNOME USB protection", CHECK_OK, "usb-protection deferred to USBGuard");
+            EMIT("GNOME USB protection", CHECK_OK, "usb-protection deferred to USBGuard");
         } else {
-            results[used++] = make_result("GNOME USB protection", CHECK_WARN, "usb-protection=false not found");
+            EMIT("GNOME USB protection", CHECK_WARN, "usb-protection=false not found");
         }
     }
 
-    if (policy_readable && used < max_results) {
+    if (policy_readable) {
         if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTOMOUNT_KEY, "false") &&
             dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTOMOUNT_OPEN_KEY, "false")) {
-            results[used++] = make_result("automount disabled", CHECK_OK, "automount-open also disabled");
+            EMIT("automount disabled", CHECK_OK, "automount-open also disabled");
         } else {
-            results[used++] = make_result("automount disabled", CHECK_WARN, "missing automount hardening keys");
+            EMIT("automount disabled", CHECK_WARN, "missing automount hardening keys");
         }
     }
 
-    if (policy_readable && used < max_results) {
+    if (policy_readable) {
         if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_AUTORUN_KEY, "true")) {
-            results[used++] = make_result("autorun disabled", CHECK_OK, "autorun-never set");
+            EMIT("autorun disabled", CHECK_OK, "autorun-never set");
         } else {
-            results[used++] = make_result("autorun disabled", CHECK_WARN, "autorun-never not found");
+            EMIT("autorun disabled", CHECK_WARN, "autorun-never not found");
         }
     }
 
-    if (policy_readable && used < max_results) {
+    if (policy_readable) {
         if (dconf_value_matches(dconf_policy, BYTHOS_DCONF_READ_ONLY_MEDIA_KEY, "true")) {
-            results[used++] = make_result("removable media lockdown", CHECK_OK, "read-only enforced");
+            EMIT("removable media lockdown", CHECK_OK, "read-only enforced");
         } else {
-            results[used++] = make_result("removable media lockdown", CHECK_WARN, "read-only enforcement not found");
+            EMIT("removable media lockdown", CHECK_WARN, "read-only enforcement not found");
         }
     }
 
-    if (used < max_results) {
-        if (bythos_file_exists(dconf_profile)) {
-            results[used++] = make_result("dconf system profile", CHECK_OK, "system dconf profile present");
-        } else {
-            results[used++] = make_result("dconf system profile", CHECK_WARN, "system dconf profile missing");
-        }
+    if (bythos_file_exists(dconf_profile)) {
+        EMIT("dconf system profile", CHECK_OK, "system dconf profile present");
+    } else {
+        EMIT("dconf system profile", CHECK_WARN, "system dconf profile missing");
     }
 
     return used;

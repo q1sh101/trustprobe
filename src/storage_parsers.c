@@ -91,8 +91,12 @@ bool bythos_parse_luks_pcr_mask(const char *text, uint32_t *mask_out) {
                 while (q < eol) {
                     if (*q >= '0' && *q <= '9') {
                         unsigned int n = 0;
+                        unsigned int n_digits = 0;
                         while (q < eol && *q >= '0' && *q <= '9') {
-                            n = n * 10 + (unsigned int)(*q - '0');
+                            if (n_digits < 3) {
+                                n = n * 10 + (unsigned int)(*q - '0');
+                                n_digits++;
+                            }
                             q++;
                         }
                         if (n < 32) {

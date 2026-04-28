@@ -147,18 +147,21 @@ bythos_fwupd_updates_status_t bythos_parse_fwupd_updates(const char *text, int e
 
 bool bythos_hsi_find_result(const char *json, const char *appstream_id,
                                 char *result_buf, size_t result_size) {
+    static const char APPSTREAM_ID_KEY[] = "\"AppstreamId\"";
+    static const char HSI_RESULT_KEY[]   = "\"HsiResult\"";
+
     if (json == NULL || appstream_id == NULL || result_buf == NULL || result_size == 0) {
         return false;
     }
 
     const char *cursor = json;
     while (*cursor != '\0') {
-        const char *id_key = strstr(cursor, "\"AppstreamId\"");
+        const char *id_key = strstr(cursor, APPSTREAM_ID_KEY);
         if (id_key == NULL) {
             break;
         }
 
-        const char *colon = strchr(id_key + 13, ':');
+        const char *colon = strchr(id_key + sizeof(APPSTREAM_ID_KEY) - 1, ':');
         if (colon == NULL) {
             break;
         }
@@ -176,8 +179,8 @@ bool bythos_hsi_find_result(const char *json, const char *appstream_id,
         size_t target_len = strlen(appstream_id);
 
         if (id_len == target_len && memcmp(q1, appstream_id, id_len) == 0) {
-            const char *hsi_key = strstr(q2 + 1, "\"HsiResult\"");
-            const char *next_id = strstr(q2 + 1, "\"AppstreamId\"");
+            const char *hsi_key = strstr(q2 + 1, HSI_RESULT_KEY);
+            const char *next_id = strstr(q2 + 1, APPSTREAM_ID_KEY);
 
             if (hsi_key == NULL) {
                 break;
@@ -187,7 +190,7 @@ bool bythos_hsi_find_result(const char *json, const char *appstream_id,
                 break;
             }
 
-            const char *hsi_colon = strchr(hsi_key + 11, ':');
+            const char *hsi_colon = strchr(hsi_key + sizeof(HSI_RESULT_KEY) - 1, ':');
             if (hsi_colon == NULL) {
                 break;
             }

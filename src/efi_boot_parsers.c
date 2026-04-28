@@ -1,10 +1,10 @@
-#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "efi_boot_parsers.h"
+#include "runtime.h"
 
 #define EFI_VAR_ATTR_SIZE 4
 #define EFI_DP_END_TYPE 0x7F
@@ -54,14 +54,6 @@ static void utf16le_to_ascii(const unsigned char *src, size_t src_bytes,
         dst[di++] = (code < 128) ? (char)code : '?';
     }
     dst[di] = '\0';
-}
-
-static void to_lower_ascii(const char *src, char *dst, size_t dst_size) {
-    size_t i = 0;
-    for (; src[i] != '\0' && i + 1 < dst_size; i++) {
-        dst[i] = (char)tolower((unsigned char)src[i]);
-    }
-    dst[i] = '\0';
 }
 
 static bythos_efi_boot_type_t classify_device_path(const unsigned char *dp,
@@ -137,7 +129,7 @@ static bythos_efi_boot_type_t classify_device_path(const unsigned char *dp,
 
 static bythos_efi_boot_type_t classify_description(const char *desc) {
     char lower[128];
-    to_lower_ascii(desc, lower, sizeof(lower));
+    bythos_to_lower_ascii(desc, lower, sizeof(lower));
 
     if (strstr(lower, "usb") != NULL || strstr(lower, "removable") != NULL) {
         return BYTHOS_EFI_BOOT_TYPE_USB;

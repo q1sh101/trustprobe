@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
 
@@ -26,7 +27,7 @@ size_t bythos_check_bios_cntl(check_result_t *results, size_t max_results) {
 
     int fd = open(INTEL_PCH_CONFIG, O_RDONLY);
     if (fd < 0) {
-        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "PCI config not readable");
+        results[used++] = make_root_result("Intel BIOS write protection", CHECK_SKIP, "PCI config not readable");
         return used;
     }
 

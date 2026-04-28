@@ -60,5 +60,19 @@ static inline const char *bythos_pl(size_t n, const char *singular, const char *
     return n == 1 ? singular : plural;
 }
 
+#define EMIT(name_, state_, detail_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_result((name_), (state_), (detail_)); \
+        } \
+    } while (0)
+
+#define EMIT_ROOT(name_, state_, detail_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_root_result((name_), (state_), (detail_)); \
+        } \
+    } while (0)
+
 #endif
 

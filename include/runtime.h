@@ -13,6 +13,7 @@ typedef enum {
 } bythos_service_state_t;
 
 char *bythos_trim(char *text);
+void bythos_to_lower_ascii(const char *src, char *dst, size_t dst_size);
 bool bythos_command_exists(const char *name);
 bool bythos_file_exists(const char *path);
 bool bythos_read_file_text(const char *path, char *buffer, size_t size);
@@ -22,5 +23,6 @@ bool bythos_read_key_value(const char *path, const char *key, char *buffer, size
 bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t size, int *exit_status);
 int bythos_run_argv_quiet(const char *const argv[]);
 bythos_service_state_t bythos_probe_systemd_service(const char *unit);
+const char *bythos_esp_efi_base(void);
 
 #endif

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 #include "storage_parsers.h"
 
@@ -26,17 +27,17 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
     size_t used = 0;
     static const char *const lsblk_argv[] = {"lsblk", "-P", "-o", "NAME,TYPE,FSTYPE", NULL};
 
-    if (used < max_results) {
+    {
         char buffer[8192] = {0};
         int status = -1;
         bythos_lsblk_posture_t posture = {0};
 
         if (!bythos_command_exists("lsblk")) {
-            results[used++] = make_result("LUKS block devices", CHECK_SKIP, "lsblk not available");
+            EMIT("LUKS block devices", CHECK_SKIP, "lsblk not available");
         } else if (!bythos_capture_argv_status(lsblk_argv, buffer, sizeof(buffer), &status)) {
-            results[used++] = make_result("LUKS block devices", CHECK_WARN, "unable to inspect block devices");
+            EMIT("LUKS block devices", CHECK_WARN, "unable to inspect block devices");
         } else if (status != 0) {
-            results[used++] = make_result("LUKS block devices", CHECK_WARN, "lsblk inspection failed");
+            EMIT("LUKS block devices", CHECK_WARN, "lsblk inspection failed");
         } else {
             bythos_parse_lsblk_posture(buffer, &posture);
             if (posture.luks_count > 0) {
@@ -48,7 +49,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                     posture.luks_count,
                     bythos_pl(posture.luks_count, "volume", "volumes")
                 );
-                results[used++] = make_result("LUKS block devices", CHECK_OK, detail);
+                EMIT("LUKS block devices", CHECK_OK, detail);
             } else if (posture.crypt_count > 0 && posture.crypt_count == posture.crypt_swap_count) {
                 char detail[224];
                 snprintf(
@@ -59,7 +60,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                     bythos_pl(posture.crypt_swap_count, "device", "devices"),
                     "no LUKS-encrypted persistent volumes detected"
                 );
-                results[used++] = make_result("LUKS block devices", CHECK_WARN, detail);
+                EMIT("LUKS block devices", CHECK_WARN, detail);
             } else if (posture.crypt_count > 0) {
                 char detail[224];
                 snprintf(
@@ -70,18 +71,14 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                     bythos_pl(posture.crypt_count, "device", "devices"),
                     "no LUKS signature detected"
                 );
-                results[used++] = make_result("LUKS block devices", CHECK_WARN, detail);
+                EMIT("LUKS block devices", CHECK_WARN, detail);
             } else {
-                results[used++] = make_result(
-                    "LUKS block devices",
-                    CHECK_WARN,
-                    "no LUKS-encrypted volumes detected"
-                );
+                EMIT("LUKS block devices", CHECK_WARN, "no LUKS-encrypted volumes detected");
             }
         }
     }
 
-    if (used < max_results) {
+    {
         static const char *const lsblk_fstype_argv[] = {
             "lsblk", "-r", "-n", "-o", "NAME,FSTYPE", NULL
         };
@@ -89,16 +86,13 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         int lsblk_status = -1;
 
         if (!bythos_command_exists("lsblk")) {
-            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
-                "lsblk not available");
+            EMIT("LUKS TPM binding", CHECK_SKIP, "lsblk not available");
         } else if (!bythos_command_exists("cryptsetup")) {
-            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
-                "cryptsetup not available");
+            EMIT("LUKS TPM binding", CHECK_SKIP, "cryptsetup not available");
         } else if (!bythos_capture_argv_status(lsblk_fstype_argv, lsblk_buf,
                                                     sizeof(lsblk_buf), &lsblk_status) ||
                    lsblk_status != 0) {
-            results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
-                "unable to inspect block devices");
+            EMIT("LUKS TPM binding", CHECK_SKIP, "unable to inspect block devices");
         } else {
             size_t luks_found = 0;
             size_t luks_no_token = 0;
@@ -164,21 +158,18 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
             }
 
             if (luks_found == 0) {
-                results[used++] = make_result("LUKS TPM binding", CHECK_SKIP,
-                    "no LUKS devices found");
+                EMIT("LUKS TPM binding", CHECK_SKIP, "no LUKS devices found");
             } else if (!any_token) {
-                results[used++] = make_result("LUKS TPM binding", CHECK_WARN,
-                    "LUKS device without TPM2 token");
+                EMIT("LUKS TPM binding", CHECK_WARN, "LUKS device without TPM2 token");
             } else if (luks_no_token > 0) {
-                results[used++] = make_result("LUKS TPM binding", CHECK_WARN,
-                    "at least one LUKS device without TPM2 token");
+                EMIT("LUKS TPM binding", CHECK_WARN, "at least one LUKS device without TPM2 token");
             } else if (weakest_mask == 0xFFFFFFFFu || weakest_mask == 0) {
                 /* token present but PCR field not parsed */
                 char detail[BYTHOS_DETAIL_MAX];
                 snprintf(detail, sizeof(detail),
                     "TPM2 token on %zu %s; PCR binding unreadable",
                     luks_found, bythos_pl(luks_found, "device", "devices"));
-                results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                EMIT("LUKS TPM binding", CHECK_WARN, detail);
             } else {
                 bool has7 = (weakest_mask & PCR_BIT(7)) != 0;
                 bool has4 = (weakest_mask & PCR_BIT(4)) != 0;
@@ -191,26 +182,26 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                 if (!has7) {
                     snprintf(detail, sizeof(detail),
                         "PCRs: %s; PCR 7 absent, Secure Boot state unmeasured", pcr_str);
-                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
                 } else if (!has4 && !has9) {
                     snprintf(detail, sizeof(detail),
                         "PCRs: %s only; bootloader and initramfs unprotected", pcr_str);
-                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
                 } else if (!has9) {
                     snprintf(detail, sizeof(detail),
                         "PCRs: %s; initramfs unprotected", pcr_str);
-                    results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
                 } else if (has0) {
                     if (luks_token_noparsed > 0) {
                         snprintf(detail, sizeof(detail),
                             "PCRs: %s; %zu %s PCR binding unreadable",
                             pcr_str, luks_token_noparsed,
                             bythos_pl(luks_token_noparsed, "device", "devices"));
-                        results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                        EMIT("LUKS TPM binding", CHECK_WARN, detail);
                     } else {
                         snprintf(detail, sizeof(detail),
                             "PCRs: %s; firmware and full boot chain measured", pcr_str);
-                        results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
+                        EMIT("LUKS TPM binding", CHECK_OK, detail);
                     }
                 } else {
                     if (luks_token_noparsed > 0) {
@@ -218,11 +209,11 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                             "PCRs: %s; %zu %s PCR binding unreadable",
                             pcr_str, luks_token_noparsed,
                             bythos_pl(luks_token_noparsed, "device", "devices"));
-                        results[used++] = make_result("LUKS TPM binding", CHECK_WARN, detail);
+                        EMIT("LUKS TPM binding", CHECK_WARN, detail);
                     } else {
                         snprintf(detail, sizeof(detail),
                             "PCRs: %s; boot chain measured", pcr_str);
-                        results[used++] = make_result("LUKS TPM binding", CHECK_OK, detail);
+                        EMIT("LUKS TPM binding", CHECK_OK, detail);
                     }
                 }
             }

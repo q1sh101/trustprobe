@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 
 static const char *const BOLT_SYSFS_BASE = "/sys/bus/thunderbolt/devices";
@@ -68,97 +69,86 @@ static bool read_thunderbolt_security_level(char *buffer, size_t size,
 size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    if (used < max_results) {
-        switch (bythos_probe_systemd_service("bolt.service")) {
-        case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "systemctl not available");
-            break;
-        case BYTHOS_SERVICE_STATE_ACTIVE:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_OK, "running");
-            break;
-        case BYTHOS_SERVICE_STATE_INACTIVE:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
-            break;
-        case BYTHOS_SERVICE_STATE_MISSING:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "not installed");
-            break;
-        default:
-            results[used++] = make_result("Thunderbolt policy service", CHECK_SKIP, "state unavailable");
-            break;
-        }
+    switch (bythos_probe_systemd_service("bolt.service")) {
+    case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        EMIT("Thunderbolt policy service", CHECK_SKIP, "systemctl not available");
+        break;
+    case BYTHOS_SERVICE_STATE_ACTIVE:
+        EMIT("Thunderbolt policy service", CHECK_OK, "running");
+        break;
+    case BYTHOS_SERVICE_STATE_INACTIVE:
+        EMIT("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
+        break;
+    case BYTHOS_SERVICE_STATE_MISSING:
+        EMIT("Thunderbolt policy service", CHECK_SKIP, "not installed");
+        break;
+    default:
+        EMIT("Thunderbolt policy service", CHECK_SKIP, "state unavailable");
+        break;
     }
 
     /* Security level comes from sysfs; boltctl presence is not required. */
-    if (used < max_results) {
+    {
         char level[64] = {0};
         bool controller_visible = false;
 
         if (!read_thunderbolt_security_level(level, sizeof(level),
                                              &controller_visible)) {
             if (!controller_visible) {
-                results[used++] = make_result("Thunderbolt security level", CHECK_SKIP,
+                EMIT("Thunderbolt security level", CHECK_SKIP,
                     "no Thunderbolt controller visible");
             } else {
-                results[used++] = make_result("Thunderbolt security level", CHECK_WARN,
+                EMIT("Thunderbolt security level", CHECK_WARN,
                     "Thunderbolt controller visible but security level unreadable");
             }
         } else {
             char *trimmed = bythos_trim(level);
 
             if (strcmp(trimmed, "secure") == 0 || strcmp(trimmed, "dponly") == 0) {
-                results[used++] = make_result("Thunderbolt security level", CHECK_OK, trimmed);
+                EMIT("Thunderbolt security level", CHECK_OK, trimmed);
             } else if (strcmp(trimmed, "user") == 0) {
-                results[used++] = make_result("Thunderbolt security level", CHECK_OK,
-                    "user (authorize on connect)");
+                EMIT("Thunderbolt security level", CHECK_OK, "user (authorize on connect)");
             } else if (strcmp(trimmed, "none") == 0) {
-                results[used++] = make_result("Thunderbolt security level", CHECK_WARN,
-                    "none (all devices trusted)");
+                EMIT("Thunderbolt security level", CHECK_WARN, "none (all devices trusted)");
             } else {
                 char detail[BYTHOS_DETAIL_MAX];
                 snprintf(detail, sizeof(detail), "%s (unknown level)", trimmed);
-                results[used++] = make_result("Thunderbolt security level", CHECK_WARN, detail);
+                EMIT("Thunderbolt security level", CHECK_WARN, detail);
             }
         }
     }
 
     /* boltctl inventory is informational; do not over-parse human output. */
-    if (used < max_results) {
+    {
         static const char *const boltctl_list_argv[] = {"boltctl", "list", NULL};
         char buffer[4096] = {0};
         int exit_status = -1;
 
         if (!bythos_command_exists("boltctl")) {
-            results[used++] = make_result("Thunderbolt devices (optional)", CHECK_SKIP,
-                "boltctl not installed");
+            EMIT("Thunderbolt devices (optional)", CHECK_SKIP, "boltctl not installed");
         } else if (!bythos_capture_argv_status(boltctl_list_argv, buffer, sizeof(buffer), &exit_status) ||
             exit_status != 0) {
-            results[used++] = make_result("Thunderbolt devices (optional)", CHECK_SKIP,
-                "unable to list Thunderbolt devices");
+            EMIT("Thunderbolt devices (optional)", CHECK_SKIP, "unable to list Thunderbolt devices");
         } else {
             char *trimmed = bythos_trim(buffer);
             if (*trimmed == '\0') {
-                results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
-                    "none visible");
+                EMIT("Thunderbolt devices (optional)", CHECK_OK, "none visible");
             } else {
-                results[used++] = make_result("Thunderbolt devices (optional)", CHECK_OK,
-                    "inventory available");
+                EMIT("Thunderbolt devices (optional)", CHECK_OK, "inventory available");
             }
         }
     }
 
-    if (used < max_results) {
+    {
         char val[8] = {0};
         if (!read_tb_domain_attr("iommu_dma_protection", val, sizeof(val))) {
-            results[used++] = make_result("Thunderbolt DMA protection", CHECK_SKIP,
-                "iommu_dma_protection not available");
+            EMIT("Thunderbolt DMA protection", CHECK_SKIP, "iommu_dma_protection not available");
         } else {
             char *v = bythos_trim(val);
             if (strcmp(v, "1") == 0) {
-                results[used++] = make_result("Thunderbolt DMA protection", CHECK_OK,
-                    "pre-boot DMA active");
+                EMIT("Thunderbolt DMA protection", CHECK_OK, "pre-boot DMA active");
             } else {
-                results[used++] = make_result("Thunderbolt DMA protection", CHECK_WARN,
-                    "pre-boot DMA inactive");
+                EMIT("Thunderbolt DMA protection", CHECK_WARN, "pre-boot DMA inactive");
             }
         }
     }

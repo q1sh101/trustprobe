@@ -103,6 +103,25 @@ int main(void) {
     assert_true("trim_null", bythos_trim(NULL) == NULL);
 
     {
+        char dst[16];
+        memset(dst, 'X', sizeof(dst));
+        bythos_to_lower_ascii("ABCdef", dst, sizeof(dst));
+        assert_true("to_lower_basic", strcmp(dst, "abcdef") == 0);
+
+        memset(dst, 'X', sizeof(dst));
+        bythos_to_lower_ascii("HELLO WORLD!", dst, 6);
+        assert_true("to_lower_truncate", strcmp(dst, "hello") == 0);
+
+        memset(dst, 'X', sizeof(dst));
+        bythos_to_lower_ascii("", dst, sizeof(dst));
+        assert_true("to_lower_empty", dst[0] == '\0');
+
+        bythos_to_lower_ascii(NULL, dst, sizeof(dst));
+        bythos_to_lower_ascii("X", NULL, 4);
+        bythos_to_lower_ascii("X", dst, 0);
+    }
+
+    {
         char template[] = "./tmp-bythos-runtime-empty-XXXXXX";
         char *dir = mkdtemp(template);
         if (dir == NULL) {

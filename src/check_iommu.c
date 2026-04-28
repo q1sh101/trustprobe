@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "checks.h"
+#include "checks_internal.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
 
@@ -13,27 +14,25 @@ size_t bythos_check_iommu(check_result_t *results, size_t max_results) {
     size_t group_count = 0;
     bool groups_visible = false;
 
-    if (used < max_results) {
-        if (bythos_count_child_dirs(groups_path, &group_count) && group_count > 0) {
-            char detail[128];
-            snprintf(detail, sizeof(detail), "%zu %s active",
-                group_count, bythos_pl(group_count, "group", "groups"));
-            groups_visible = true;
-            results[used++] = make_result("IOMMU groups", CHECK_OK, detail);
-        } else {
-            results[used++] = make_result("IOMMU groups", CHECK_WARN, "none visible");
-        }
+    if (bythos_count_child_dirs(groups_path, &group_count) && group_count > 0) {
+        char detail[128];
+        snprintf(detail, sizeof(detail), "%zu %s active",
+            group_count, bythos_pl(group_count, "group", "groups"));
+        groups_visible = true;
+        EMIT("IOMMU groups", CHECK_OK, detail);
+    } else {
+        EMIT("IOMMU groups", CHECK_WARN, "none visible");
     }
 
-    if (used < max_results) {
+    {
         char cmdline[4096] = {0};
         bythos_iommu_cmdline_t parsed = {0};
 
         if (!bythos_read_file_text(cmdline_path, cmdline, sizeof(cmdline))) {
             if (groups_visible) {
-                results[used++] = make_result("IOMMU DMA posture", CHECK_OK, "runtime groups visible; kernel cmdline unavailable");
+                EMIT("IOMMU DMA posture", CHECK_OK, "runtime groups visible; kernel cmdline unavailable");
             } else {
-                results[used++] = make_result("IOMMU DMA posture", CHECK_WARN, "unable to inspect kernel cmdline");
+                EMIT("IOMMU DMA posture", CHECK_WARN, "unable to inspect kernel cmdline");
             }
             return used;
         }
@@ -41,11 +40,11 @@ size_t bythos_check_iommu(check_result_t *results, size_t max_results) {
         bythos_parse_iommu_cmdline(cmdline, &parsed);
 
         if (parsed.iommu_disabled) {
-            results[used++] = make_result("IOMMU DMA posture", CHECK_FAIL, "IOMMU disabled in kernel cmdline");
+            EMIT("IOMMU DMA posture", CHECK_FAIL, "IOMMU disabled in kernel cmdline");
         } else if (parsed.passthrough_on) {
-            results[used++] = make_result("IOMMU DMA posture", CHECK_FAIL, "passthrough override enabled in kernel cmdline");
+            EMIT("IOMMU DMA posture", CHECK_FAIL, "passthrough override enabled in kernel cmdline");
         } else if (parsed.strict_off) {
-            results[used++] = make_result("IOMMU DMA posture", CHECK_WARN,
+            EMIT("IOMMU DMA posture", CHECK_WARN,
                 groups_visible ? "runtime groups visible; strict mode explicitly disabled"
                                : "strict mode explicitly disabled in kernel cmdline");
         } else if (groups_visible) {
@@ -63,11 +62,11 @@ size_t bythos_check_iommu(check_result_t *results, size_t max_results) {
                 snprintf(detail, sizeof(detail), "runtime groups visible; no passthrough override seen");
             }
 
-            results[used++] = make_result("IOMMU DMA posture", CHECK_OK, detail);
+            EMIT("IOMMU DMA posture", CHECK_OK, detail);
         } else if (parsed.passthrough_off || parsed.strict_on || parsed.vendor_iommu_on) {
-            results[used++] = make_result("IOMMU DMA posture", CHECK_WARN, "cmdline looks hardened but runtime groups are not visible");
+            EMIT("IOMMU DMA posture", CHECK_WARN, "cmdline looks hardened but runtime groups are not visible");
         } else {
-            results[used++] = make_result("IOMMU DMA posture", CHECK_WARN, "unable to confirm DMA remapping posture");
+            EMIT("IOMMU DMA posture", CHECK_WARN, "unable to confirm DMA remapping posture");
         }
     }
 

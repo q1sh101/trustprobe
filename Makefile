@@ -73,8 +73,8 @@ $(STORAGE_TEST_BIN): tests/storage_parsers.c src/storage_parsers.c include/stora
 $(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
 	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
 
-$(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c include/efi_boot_parsers.h
-	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c -o $@
+$(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c include/efi_boot_parsers.h include/runtime.h
+	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c -o $@
 
 $(ESP_TEST_BIN): tests/esp_posture.c src/esp_parsers.c include/esp_parsers.h
 	$(CC) $(CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@
