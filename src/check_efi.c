@@ -18,7 +18,7 @@ size_t bythos_check_efi(check_result_t *results, size_t max_results) {
     }
 
     if (!efi_visible) {
-        EMIT("ESRT entries", CHECK_SKIP, "EFI runtime not visible");
+        EMIT_SKIP_FEATURE("ESRT entries", "EFI runtime");
     } else {
         size_t count = 0;
         bool readable = bythos_count_child_dirs(

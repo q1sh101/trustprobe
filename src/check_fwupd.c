@@ -19,7 +19,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
 
     switch (bythos_probe_systemd_service("fwupd.service")) {
     case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-        EMIT_INSTALL("fwupd service", "systemctl not available");
+        EMIT_SKIP_TOOL_INSTALL("fwupd service", "systemd");
         break;
     case BYTHOS_SERVICE_STATE_ACTIVE:
         EMIT("fwupd service", CHECK_OK, "running");
@@ -31,14 +31,14 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         EMIT("fwupd service", CHECK_WARN, "not installed");
         break;
     default:
-        EMIT("fwupd service", CHECK_SKIP, "state unavailable");
+        EMIT_SKIP_PROBE("fwupd service", "systemctl");
         break;
     }
 
     {
         char enabled[32] = {0};
         if (!has_fwupdmgr) {
-            EMIT_INSTALL("LVFS remote", "fwupdmgr not installed");
+            EMIT_SKIP_TOOL_INSTALL("LVFS remote", "fwupd");
         } else if (!bythos_file_exists(lvfs_conf)) {
             EMIT("LVFS remote", CHECK_WARN, "lvfs.conf not found");
         } else if (!bythos_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
@@ -53,11 +53,11 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     {
         int devices = -1;
         if (!has_fwupdmgr) {
-            EMIT_INSTALL("firmware inventory", "fwupdmgr not installed");
+            EMIT_SKIP_TOOL_INSTALL("firmware inventory", "fwupd");
         } else if ((devices = bythos_run_argv_quiet(fwupd_devices_argv)) == 0) {
             EMIT("firmware inventory", CHECK_OK, "device list available");
         } else {
-            EMIT("firmware inventory", CHECK_SKIP, "unable to list devices");
+            EMIT_SKIP_EXEC("firmware inventory", "fwupdmgr");
         }
     }
 
@@ -67,15 +67,15 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         bythos_fwupd_updates_status_t updates = BYTHOS_FWUPD_UPDATES_UNKNOWN;
 
         if (!has_fwupdmgr) {
-            EMIT_INSTALL("firmware update status", "fwupdmgr not installed");
+            EMIT_SKIP_TOOL_INSTALL("firmware update status", "fwupd");
         } else if (!bythos_capture_argv_status(fwupd_updates_argv, buffer, sizeof(buffer), &status)) {
-            EMIT("firmware update status", CHECK_SKIP, "unable to query");
+            EMIT_SKIP_EXEC("firmware update status", "fwupdmgr");
         } else if ((updates = bythos_parse_fwupd_updates(buffer, status)) == BYTHOS_FWUPD_UPDATES_NONE) {
             EMIT("firmware update status", CHECK_OK, "no updates available");
         } else if (updates == BYTHOS_FWUPD_UPDATES_AVAILABLE) {
             EMIT("firmware update status", CHECK_WARN, "updates available");
         } else {
-            EMIT("firmware update status", CHECK_SKIP, "unavailable");
+            EMIT_SKIP_PROBE("firmware update status", "fwupdmgr");
         }
     }
 
@@ -86,15 +86,22 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         int hist_status = -1;
 
         if (!has_fwupdmgr) {
-            EMIT_INSTALL("firmware update history", "fwupdmgr not installed");
+            EMIT_SKIP_TOOL_INSTALL("firmware update history", "fwupd");
         } else if (!bythos_capture_argv_status(fwupd_history_argv, hist_buffer, sizeof(hist_buffer), &hist_status)) {
-            EMIT("firmware update history", CHECK_SKIP, "history unavailable");
+            EMIT_SKIP_EXEC("firmware update history", "fwupdmgr");
         } else if (hist_status != 0) {
-            EMIT("firmware update history", CHECK_SKIP, "history unavailable");
+            if (hist_buffer[0] == '\0' ||
+                strstr(hist_buffer, "No history") != NULL ||
+                strstr(hist_buffer, "no history") != NULL ||
+                strstr(hist_buffer, "No firmware updates") != NULL) {
+                EMIT_SKIP_SUBJECT("firmware update history", "firmware history");
+            } else {
+                EMIT_SKIP_EXEC("firmware update history", "fwupdmgr");
+            }
         } else if (hist_buffer[0] != '\0') {
             EMIT("firmware update history", CHECK_OK, "available");
         } else {
-            EMIT("firmware update history", CHECK_SKIP, "no history visible");
+            EMIT_SKIP_SUBJECT("firmware update history", "firmware history");
         }
     }
 
@@ -113,8 +120,11 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     bythos_cpu_vendor_t vendor = bythos_cpu_vendor();
 
     if (!hsi_ok) {
-        EMIT("HSI query", CHECK_SKIP,
-            has_fwupdmgr ? "security query failed" : "fwupdmgr not installed");
+        if (has_fwupdmgr) {
+            EMIT_SKIP_EXEC("HSI query", "fwupdmgr");
+        } else {
+            EMIT_SKIP_TOOL_INSTALL("HSI query", "fwupd");
+        }
         return used;
     }
 
@@ -123,9 +133,9 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         if (used < max_results) { \
             char _v[64] = {0}; \
             if (!bythos_hsi_find_result(hsi_json, (id_), _v, sizeof(_v))) { \
-                results[used++] = make_result((name_), CHECK_SKIP, "not reported"); \
+                results[used++] = make_skip((name_), SKIP_FEATURE_ABSENT, "not reported"); \
             } else if (strcmp(_v, "not-supported") == 0) { \
-                results[used++] = make_result((name_), CHECK_SKIP, "not supported"); \
+                results[used++] = make_skip((name_), SKIP_FEATURE_ABSENT, "not supported"); \
             } else if (strcmp(_v, (positive_)) == 0) { \
                 results[used++] = make_result((name_), CHECK_OK, (ok_msg_)); \
             } else { \
@@ -218,9 +228,9 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
                                "org.fwupd.hsi.IntelBootguard.Verified", ver_val, sizeof(ver_val));
 
             if (!has_en) {
-                EMIT("HSI: Boot Guard", CHECK_SKIP, "not reported");
+                EMIT_SKIP("HSI: Boot Guard", SKIP_FEATURE_ABSENT, "not reported");
             } else if (strcmp(en_val, "not-supported") == 0) {
-                EMIT("HSI: Boot Guard", CHECK_SKIP, "not supported");
+                EMIT_SKIP("HSI: Boot Guard", SKIP_FEATURE_ABSENT, "not supported");
             } else if (strcmp(en_val, "enabled") != 0) {
                 EMIT("HSI: Boot Guard", CHECK_WARN, "not enabled");
             } else if (has_ver && strcmp(ver_val, "enabled") != 0) {
@@ -239,7 +249,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
                               "org.fwupd.hsi.SpiWriteProtection.Locked",  intel_lk, sizeof(intel_lk));
 
             if (!has_en && !has_lk) {
-                EMIT("HSI: SPI write protection", CHECK_SKIP, "not reported");
+                EMIT_SKIP("HSI: SPI write protection", SKIP_FEATURE_ABSENT, "not reported");
             } else if (strcmp(intel_en, "enabled") == 0 && strcmp(intel_lk, "enabled") == 0) {
                 EMIT("HSI: SPI write protection", CHECK_OK, "enabled and locked");
             } else {

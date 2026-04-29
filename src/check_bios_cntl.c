@@ -17,18 +17,18 @@ size_t bythos_check_bios_cntl(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
-        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "Intel-only");
+        EMIT_SKIP_VENDOR("Intel BIOS write protection", "Intel-only check");
         return used;
     }
 
     if (!bythos_file_exists(INTEL_PCH_CONFIG)) {
-        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "Intel PCH not found");
+        EMIT_SKIP_HW("Intel BIOS write protection", "Intel PCH");
         return used;
     }
 
     int fd = open(INTEL_PCH_CONFIG, O_RDONLY);
     if (fd < 0) {
-        results[used++] = make_root_result("Intel BIOS write protection", CHECK_SKIP, "PCI config not readable");
+        EMIT_SKIP_EXEC_ROOT("Intel BIOS write protection", "PCI config");
         return used;
     }
 
@@ -37,7 +37,7 @@ size_t bythos_check_bios_cntl(check_result_t *results, size_t max_results) {
     close(fd);
 
     if (n != 1) {
-        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "BIOS_CNTL register unreadable");
+        EMIT_SKIP_EXEC("Intel BIOS write protection", "BIOS_CNTL");
         return used;
     }
 

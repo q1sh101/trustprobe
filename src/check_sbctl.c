@@ -17,19 +17,19 @@ size_t bythos_check_sbctl(check_result_t *results, size_t max_results) {
         bythos_sbctl_status_t sbctl_status = {0};
 
         if (!bythos_command_exists("sbctl")) {
-            EMIT_INSTALL("sbctl (optional)", "not installed");
+            EMIT_SKIP_TOOL_INSTALL("Secure Boot key management (optional)", "sbctl");
         } else if (!bythos_capture_argv_status(sbctl_status_argv, buffer, sizeof(buffer), &status)) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
+            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
         } else if (status != 0) {
-            EMIT_INSTALL("sbctl (optional)", "not initialized");
+            EMIT_SKIP_NOT_CONF("Secure Boot key management (optional)", "sbctl");
         } else if (!bythos_parse_sbctl_status(buffer, &sbctl_status)) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
+            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
         } else if (!sbctl_status.installed_known) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
+            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
         } else if (!sbctl_status.installed) {
-            EMIT_INSTALL("sbctl (optional)", "not initialized");
+            EMIT_SKIP_NOT_CONF("Secure Boot key management (optional)", "sbctl");
         } else if (!sbctl_status.owner_guid_present) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "owner GUID not visible");
+            EMIT_SKIP_FIELD("Secure Boot key management (optional)", "GUID", "sbctl");
         } else {
             char detail[192];
             if (sbctl_status.vendor_keys_present) {
@@ -42,7 +42,7 @@ size_t bythos_check_sbctl(check_result_t *results, size_t max_results) {
             } else {
                 snprintf(detail, sizeof(detail), "%s", "initialized; owner GUID present");
             }
-            EMIT("sbctl (optional)", CHECK_OK, detail);
+            EMIT("Secure Boot key management (optional)", CHECK_OK, detail);
         }
     }
 

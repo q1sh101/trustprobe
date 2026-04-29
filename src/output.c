@@ -25,11 +25,10 @@ static bool use_color(void) {
 
 static const char *c_reset(void) { return use_color() ? "\033[0m" : ""; }
 static const char *c_brand(void) { return use_color() ? "\033[1;38;5;220m" : ""; }
-static const char *c_blue(void) { return use_color() ? "\033[38;5;51m" : ""; }
 static const char *c_accent(void) { return use_color() ? "\033[38;5;123m" : ""; }
 static const char *c_green(void) { return use_color() ? "\033[38;5;82m" : ""; }
 static const char *c_yellow(void) { return use_color() ? "\033[38;5;214m" : ""; }
-static const char *c_red(void) { return use_color() ? "\033[38;5;196m" : ""; }
+static const char *c_red(void) { return use_color() ? "\033[38;5;160m" : ""; }
 static const char *c_dim(void) { return use_color() ? "\033[38;5;248m" : ""; }
 
 static const char *state_color(check_state_t state) {
@@ -73,6 +72,34 @@ const char *bythos_state_name(check_state_t state) {
     return "UNKNOWN";
 }
 
+const char *bythos_skip_reason_name(skip_reason_t reason) {
+    switch (reason) {
+    case SKIP_NONE:
+        return "NONE";
+    case SKIP_TOOL_ABSENT:
+        return "TOOL_ABSENT";
+    case SKIP_FEATURE_ABSENT:
+        return "FEATURE_ABSENT";
+    case SKIP_EXEC_FAILED:
+        return "EXEC_FAILED";
+    case SKIP_PROBE_INDETERMINATE:
+        return "PROBE_INDETERMINATE";
+    case SKIP_REPORT_FIELD_ABSENT:
+        return "REPORT_FIELD_ABSENT";
+    case SKIP_OUTPUT_UNPARSEABLE:
+        return "OUTPUT_UNPARSEABLE";
+    case SKIP_NOT_CONFIGURED:
+        return "NOT_CONFIGURED";
+    case SKIP_SUBJECT_ABSENT:
+        return "SUBJECT_ABSENT";
+    case SKIP_HW_ABSENT:
+        return "HW_ABSENT";
+    case SKIP_VENDOR_SCOPE:
+        return "VENDOR_SCOPE";
+    }
+    return "UNKNOWN";
+}
+
 static const char *strip_subgroup_prefix(const char *name, const char *subgroup_name) {
     size_t prefix_len = strlen(subgroup_name);
     if (strlen(name) <= prefix_len) return name;
@@ -88,7 +115,7 @@ static void print_result_line(const char *display_name, const check_result_t *re
     static const char *state_labels[] = {"ok  ", "warn", "fail", "skip"};
     const char *label = (unsigned)result->state < 4
         ? state_labels[result->state] : "????";
-    fprintf(stdout, "      %s%s%s  %s",
+    fprintf(stdout, "    %s%s%s  %s",
         state_color(result->state), label, c_reset(),
         display_name);
     if (result->detail[0] != '\0') {
@@ -133,19 +160,6 @@ check_state_t bythos_summary_state(const posture_summary_t *summary) {
         return CHECK_OK;
     }
     return CHECK_SKIP;
-}
-
-static void bythos_print_summary(const char *name, const posture_summary_t *summary) {
-    static const char *names[] = {"ok", "warn", "fail", "skip"};
-    check_state_t state = bythos_summary_state(summary);
-    const char *sname = (unsigned)state < 4 ? names[state] : "unknown";
-    printf(
-        "  %s%s%s  %s%s:%s  %zu ok  %zu warn  %zu fail  %zu skip\n",
-        c_accent(), name, c_reset(),
-        state_color(state), sname, c_reset(),
-        summary->ok_count, summary->warn_count,
-        summary->fail_count, summary->skip_count
-    );
 }
 
 static void print_json_string(const char *text) {
@@ -244,6 +258,8 @@ static void bythos_print_json(
                 print_json_string(result->name);
                 printf(",\"state\":");
                 print_json_string(bythos_state_name(result->state));
+                printf(",\"skip_reason\":");
+                print_json_string(bythos_skip_reason_name(result->skip_reason));
                 printf(",\"detail\":");
                 print_json_string(result->detail);
                 printf(",\"requires_root\":%s,\"actionable\":%s}",
@@ -267,19 +283,15 @@ static void print_groups_hierarchy(
     size_t group_count
 ) {
     for (size_t g = 0; g < group_count; g++) {
-        fprintf(stdout, "  %s%s%s\n", c_blue(), groups[g].name, c_reset());
-        putchar('\n');
         for (size_t s = 0; s < groups[g].subgroup_count; s++) {
             const check_subgroup_t *sg = &groups[g].subgroups[s];
             if (sg->result_count == 0) continue;
-            printf("    %s%s%s\n", c_accent(), sg->name, c_reset());
+            printf("  %s%s:%s\n", c_accent(), sg->name, c_reset());
             for (size_t i = 0; i < sg->result_count; i++) {
                 bythos_print_result_in_subgroup(&sg->results[i], sg->name);
             }
             putchar('\n');
         }
-        bythos_print_summary(groups[g].name, groups[g].summary);
-        putchar('\n');
     }
 }
 
@@ -291,13 +303,14 @@ static void bythos_print_plain(
 ) {
     static const char *snames[] = {"ok", "warn", "fail", "skip"};
     check_state_t ost = bythos_summary_state(overall);
-    bythos_log("%s", banner);
     putchar('\n');
-    printf("  %soverall%s  %s%s:%s  %zu ok  %zu warn  %zu fail  %zu skip\n\n",
-        c_brand(), c_reset(),
-        state_color(ost), (unsigned)ost < 4 ? snames[ost] : "unknown", c_reset(),
-        overall->ok_count, overall->warn_count,
-        overall->fail_count, overall->skip_count);
+    bythos_log("%s", banner);
+    printf("    %s%s:%s  %s%zu ok%s  %s%zu warn%s  %s%zu fail%s  %s%zu skip%s\n\n",
+        c_brand(), (unsigned)ost < 4 ? snames[ost] : "unknown", c_reset(),
+        c_green(), overall->ok_count, c_reset(),
+        c_yellow(), overall->warn_count, c_reset(),
+        c_red(), overall->fail_count, c_reset(),
+        c_dim(), overall->skip_count, c_reset());
     print_groups_hierarchy(groups, group_count);
 }
 

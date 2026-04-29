@@ -33,7 +33,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         bythos_lsblk_posture_t posture = {0};
 
         if (!bythos_command_exists("lsblk")) {
-            EMIT_INSTALL("LUKS block devices", "lsblk not available");
+            EMIT_SKIP_TOOL_INSTALL("LUKS block devices", "util-linux");
         } else if (!bythos_capture_argv_status(lsblk_argv, buffer, sizeof(buffer), &status)) {
             EMIT("LUKS block devices", CHECK_WARN, "unable to inspect block devices");
         } else if (status != 0) {
@@ -86,13 +86,13 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         int lsblk_status = -1;
 
         if (!bythos_command_exists("lsblk")) {
-            EMIT_INSTALL("LUKS TPM binding", "lsblk not available");
+            EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "util-linux");
         } else if (!bythos_command_exists("cryptsetup")) {
-            EMIT_INSTALL("LUKS TPM binding", "cryptsetup not available");
+            EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "cryptsetup");
         } else if (!bythos_capture_argv_status(lsblk_fstype_argv, lsblk_buf,
                                                     sizeof(lsblk_buf), &lsblk_status) ||
                    lsblk_status != 0) {
-            EMIT("LUKS TPM binding", CHECK_SKIP, "unable to inspect block devices");
+            EMIT_SKIP_EXEC("LUKS TPM binding", "lsblk");
         } else {
             size_t luks_found = 0;
             size_t luks_no_token = 0;
@@ -160,9 +160,9 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
             }
 
             if (luks_found == 0) {
-                EMIT("LUKS TPM binding", CHECK_SKIP, "no LUKS devices found");
+                EMIT_SKIP_SUBJECT("LUKS TPM binding", "LUKS volumes");
             } else if (dump_ok == 0) {
-                EMIT_ROOT("LUKS TPM binding", CHECK_SKIP, "luksDump not readable");
+                EMIT_SKIP_EXEC_ROOT("LUKS TPM binding", "cryptsetup");
             } else if (!any_token) {
                 EMIT("LUKS TPM binding", CHECK_WARN, "LUKS device without TPM2 token");
             } else if (luks_no_token > 0) {

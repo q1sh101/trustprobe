@@ -31,8 +31,7 @@ static size_t check_esp_permissions(check_result_t *results, size_t max_results)
     if (used >= max_results) return used;
 
     if (stat("/boot/efi", &st) != 0 && stat("/efi", &st) != 0) {
-        results[used++] = make_result("ESP mount", CHECK_SKIP,
-            "not accessible at /boot/efi or /efi");
+        EMIT_SKIP("ESP mount", SKIP_FEATURE_ABSENT, "not accessible at /boot/efi or /efi");
         return used;
     }
     if (st.st_uid != 0) {
@@ -55,8 +54,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
     const char *esp_base = bythos_esp_efi_base();
     DIR *dir = opendir(esp_base);
     if (dir == NULL) {
-        results[used++] = make_result("EFI vendor directories", CHECK_SKIP,
-            "EFI directory not accessible");
+        EMIT_SKIP_FEATURE("EFI vendor directories", "EFI directory");
         return used;
     }
 
@@ -128,15 +126,13 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
                           bythos_file_exists(lower) ? lower : NULL;
 
     if (bootx64 == NULL) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
-            "UEFI fallback loader not found");
+        EMIT_SKIP_SUBJECT("BOOTX64.EFI (fallback)", "BOOTX64.EFI");
         return used;
     }
 
     char shim[PATH_MAX] = {0};
     if (!find_shim(shim, sizeof(shim))) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
-            "present; shim not found for comparison");
+        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_SUBJECT_ABSENT, "present; shim not found for comparison");
         return used;
     }
 
@@ -148,8 +144,8 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
         return used;
     }
 
-    if (!bythos_command_exists("sha256sum")) {
-        results[used++] = make_install_result("BOOTX64.EFI (fallback)",
+    if (!bythos_command_exists("sha256sum") && used < max_results) {
+        results[used++] = make_skip_actionable("BOOTX64.EFI (fallback)", SKIP_TOOL_ABSENT,
             "present; sha256sum unavailable for identity check");
         return used;
     }
@@ -163,16 +159,14 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
                                         boot_out, sizeof(boot_out), &exit_a) || exit_a != 0 ||
         !bythos_capture_argv_status((const char *const *)shim_argv,
                                         shim_out, sizeof(shim_out), &exit_b) || exit_b != 0) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
-            "present; hash unavailable");
+        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_EXEC_FAILED, "present; hash unavailable");
         return used;
     }
 
     char boot_hash[128] = {0}, shim_hash[128] = {0};
     if (!bythos_parse_sha256sum_line(boot_out, boot_hash, sizeof(boot_hash)) ||
         !bythos_parse_sha256sum_line(shim_out, shim_hash, sizeof(shim_hash))) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
-            "present; hash parse failed");
+        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_OUTPUT_UNPARSEABLE, "present; hash parse failed");
         return used;
     }
 
@@ -194,8 +188,7 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
     snprintf(path, sizeof(path), "%s/UpdateCapsule", bythos_esp_efi_base());
     DIR *dir = opendir(path);
     if (dir == NULL) {
-        results[used++] = make_result("ESP UpdateCapsule", CHECK_SKIP,
-            "directory absent");
+        EMIT_SKIP_SUBJECT("ESP UpdateCapsule", "UpdateCapsule directory");
         return used;
     }
 

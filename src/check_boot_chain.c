@@ -32,8 +32,7 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
     }
 
     if (argv == NULL) {
-        results[used++] = make_result("bootloader version", CHECK_SKIP,
-            "bootloader tool not found");
+        EMIT_SKIP_TOOL("bootloader version", "bootloader tool");
         return used;
     }
 
@@ -41,15 +40,14 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
     int exit_status = -1;
     if (!bythos_capture_argv_status(argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0 || buf[0] == '\0') {
-        results[used++] = make_result("bootloader version", CHECK_SKIP,
-            "bootloader version unreadable");
+        EMIT_SKIP_EXEC("bootloader version", "bootloader");
         return used;
     }
 
     char *trimmed = bythos_trim(buf);
     char detail[BYTHOS_DETAIL_MAX];
     snprintf(detail, sizeof(detail), "%.160s; no CVE comparison available", trimmed);
-    results[used++] = make_result("bootloader version", CHECK_SKIP, detail);
+    EMIT_SKIP("bootloader version", SKIP_PROBE_INDETERMINATE, detail);
     return used;
 }
 
@@ -112,14 +110,12 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
 
     char shim_path[PATH_MAX] = {0};
     if (!find_shim(shim_path, sizeof(shim_path))) {
-        results[used++] = make_result("shim signature", CHECK_SKIP,
-            "shim binary not found on ESP");
+        EMIT_SKIP_SUBJECT("shim signature", "shim");
         return used;
     }
 
     if (!bythos_command_exists("pesign")) {
-        results[used++] = make_install_result("shim signature",
-            "pesign not available");
+        EMIT_SKIP_TOOL_INSTALL("shim signature", "pesign");
         return used;
     }
 
@@ -155,8 +151,7 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
 
     DIR *boot = opendir("/boot");
     if (boot == NULL) {
-        results[used++] = make_result("initramfs permissions", CHECK_SKIP,
-            "unable to read /boot");
+        EMIT_SKIP_EXEC("initramfs permissions", "/boot");
         return used;
     }
 
@@ -203,8 +198,7 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     }
 
     if (count == 0) {
-        results[used++] = make_result("initramfs permissions", CHECK_SKIP,
-            "no initramfs found in /boot");
+        EMIT_SKIP_SUBJECT("initramfs permissions", "initramfs");
         return used;
     }
 
@@ -229,13 +223,13 @@ static size_t check_sbat_revocations(check_result_t *results, size_t max_results
     int exit_status = -1;
 
     if (!bythos_command_exists("mokutil")) {
-        results[used++] = make_install_result("SBAT revocations", "mokutil not installed");
+        EMIT_SKIP_TOOL_INSTALL("SBAT revocations", "mokutil");
         return used;
     }
 
     if (!bythos_capture_argv_status(sbat_argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0) {
-        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil SBAT query failed");
+        EMIT_SKIP_EXEC("SBAT revocations", "mokutil");
         return used;
     }
 

@@ -14,20 +14,18 @@ size_t bythos_check_me_version(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
-        results[used++] = make_result("Intel ME version", CHECK_SKIP, "Intel-only");
+        EMIT_SKIP_VENDOR("Intel ME version", "Intel-only check");
         return used;
     }
 
     if (!bythos_file_exists(ME_FW_VERSION_PATH)) {
-        results[used++] = make_result("Intel ME version", CHECK_SKIP,
-            "Intel ME not present");
+        EMIT_SKIP_FEATURE("Intel ME version", "Intel ME");
         return used;
     }
 
     char buf[64] = {0};
     if (!bythos_read_file_text(ME_FW_VERSION_PATH, buf, sizeof(buf))) {
-        results[used++] = make_result("Intel ME version", CHECK_SKIP,
-            "version unreadable");
+        EMIT_SKIP_EXEC("Intel ME version", "ME version");
         return used;
     }
 
@@ -39,8 +37,7 @@ size_t bythos_check_me_version(check_result_t *results, size_t max_results) {
 
     unsigned int a = 0, b = 0, c = 0, d = 0;
     if (sscanf(buf, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
-        results[used++] = make_result("Intel ME version", CHECK_SKIP,
-            "version format unrecognized");
+        EMIT_SKIP_PARSE("Intel ME version", "ME version");
         return used;
     }
 

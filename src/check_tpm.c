@@ -41,14 +41,14 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         int exit_status = -1;
 
         if (!bythos_command_exists("tpm2_pcrread")) {
-            EMIT_INSTALL("TPM PCR 7", "tpm2_pcrread not available");
+            EMIT_SKIP_TOOL_INSTALL("TPM PCR 7", "tpm2-tools");
         } else if (!bythos_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
-            EMIT("TPM PCR 7", CHECK_SKIP, "PCR read failed");
+            EMIT_SKIP_EXEC("TPM PCR 7", "tpm2_pcrread");
         } else {
             int z = bythos_pcr_zero_check(buf, 7);
             if (z < 0) {
-                EMIT("TPM PCR 7", CHECK_SKIP, "not found in output");
+                EMIT_SKIP_FIELD("TPM PCR 7", "PCR", "tpm2_pcrread");
             } else if (z == 1) {
                 EMIT("TPM PCR 7", CHECK_WARN, "empty; Secure Boot state not measured into TPM");
             } else {
@@ -63,14 +63,14 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         int exit_status = -1;
 
         if (!bythos_command_exists("tpm2_pcrread")) {
-            EMIT_INSTALL("TPM PCR 0", "tpm2_pcrread not available");
+            EMIT_SKIP_TOOL_INSTALL("TPM PCR 0", "tpm2-tools");
         } else if (!bythos_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
-            EMIT("TPM PCR 0", CHECK_SKIP, "PCR read failed");
+            EMIT_SKIP_EXEC("TPM PCR 0", "tpm2_pcrread");
         } else {
             int z = bythos_pcr_zero_check(buf, 0);
             if (z < 0) {
-                EMIT("TPM PCR 0", CHECK_SKIP, "not found in output");
+                EMIT_SKIP_FIELD("TPM PCR 0", "PCR", "tpm2_pcrread");
             } else if (z == 1) {
                 EMIT("TPM PCR 0", CHECK_WARN, "zero; firmware not measured at boot");
             } else {
@@ -84,7 +84,7 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         FILE *f = fopen(evlog, "r");
 
         if (f == NULL) {
-            EMIT("TPM event log", CHECK_SKIP, "not available");
+            EMIT_SKIP_FEATURE("TPM event log", "TPM event log");
         } else {
             char line[512];
             bool found = false;

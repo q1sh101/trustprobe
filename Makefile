@@ -5,8 +5,6 @@ LDFLAGS ?=
 SRC := $(sort $(wildcard src/*.c))
 OBJ := $(SRC:.c=.o)
 BIN := bythos
-RULES_TEST_BIN := tests/rules_parser
-POLICY_TEST_BIN := tests/policy_parser
 FIRMWARE_TEST_BIN := tests/firmware_parsers
 FIRMWARE_OWNERSHIP_TEST_BIN := tests/firmware_ownership
 SILICON_TEST_BIN := tests/silicon_parsers
@@ -14,8 +12,9 @@ STORAGE_TEST_BIN := tests/storage_parsers
 RUNTIME_TEST_BIN := tests/runtime_capture
 EFI_BOOT_TEST_BIN := tests/efi_boot_parsers
 ESP_TEST_BIN := tests/esp_posture
+SKIP_REASON_TEST_BIN := tests/skip_reason
 
-.PHONY: all clean run help-check parser-test policy-test firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test esp-test
+.PHONY: all clean run help-check firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test esp-test skip-reason-test
 
 all: $(BIN)
 
@@ -24,12 +23,6 @@ $(BIN): $(OBJ)
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
-
-parser-test: $(RULES_TEST_BIN)
-	./$(RULES_TEST_BIN)
-
-policy-test: $(POLICY_TEST_BIN)
-	./$(POLICY_TEST_BIN)
 
 firmware-test: $(FIRMWARE_TEST_BIN)
 	./$(FIRMWARE_TEST_BIN)
@@ -52,11 +45,8 @@ efi-boot-test: $(EFI_BOOT_TEST_BIN)
 esp-test: $(ESP_TEST_BIN)
 	./$(ESP_TEST_BIN)
 
-$(RULES_TEST_BIN): tests/rules_parser.c src/usbguard_rules.c include/usbguard_rules.h
-	$(CC) $(CFLAGS) tests/rules_parser.c src/usbguard_rules.c -o $@
-
-$(POLICY_TEST_BIN): tests/policy_parser.c src/runtime.c include/runtime.h
-	$(CC) $(CFLAGS) tests/policy_parser.c src/runtime.c -o $@
+skip-reason-test: $(SKIP_REASON_TEST_BIN)
+	./$(SKIP_REASON_TEST_BIN)
 
 $(FIRMWARE_TEST_BIN): tests/firmware_parsers.c src/firmware_parsers.c include/firmware_parsers.h
 	$(CC) $(CFLAGS) tests/firmware_parsers.c src/firmware_parsers.c -o $@
@@ -79,6 +69,9 @@ $(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtim
 $(ESP_TEST_BIN): tests/esp_posture.c src/esp_parsers.c include/esp_parsers.h
 	$(CC) $(CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@
 
+$(SKIP_REASON_TEST_BIN): tests/skip_reason.c src/output.c include/output.h include/types.h
+	$(CC) $(CFLAGS) tests/skip_reason.c src/output.c -o $@
+
 run: $(BIN)
 	./$(BIN)
 
@@ -86,4 +79,4 @@ help-check: $(BIN)
 	./$(BIN) --help >/dev/null
 
 clean:
-	rm -f src/*.o $(BIN) $(RULES_TEST_BIN) $(POLICY_TEST_BIN) $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN) $(EFI_BOOT_TEST_BIN) $(ESP_TEST_BIN)
+	rm -f src/*.o $(BIN) $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN) $(EFI_BOOT_TEST_BIN) $(ESP_TEST_BIN) $(SKIP_REASON_TEST_BIN)

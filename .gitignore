@@ -1,12 +1,11 @@
 bythos
 tests/runtime_capture
 tmp-bythos-*
-tests/rules_parser
-tests/policy_parser
 tests/silicon_parsers
 tests/storage_parsers
 tests/firmware_parsers
 tests/firmware_ownership
 tests/efi_boot_parsers
 tests/esp_posture
+tests/skip_reason
 *.o

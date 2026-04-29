@@ -145,7 +145,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
 
     DIR *vendors = opendir(base);
     if (vendors == NULL) {
-        results[used++] = make_result("BIOS USB boot", CHECK_SKIP,
+        EMIT_SKIP("BIOS USB boot", SKIP_FEATURE_ABSENT,
             "firmware-attributes not available; check BIOS manually");
         return used;
     }
@@ -203,7 +203,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     closedir(vendors);
 
     if (!found) {
-        results[used++] = make_result("BIOS USB boot", CHECK_SKIP,
+        EMIT_SKIP("BIOS USB boot", SKIP_FEATURE_ABSENT,
             "USB boot attribute not exposed; check BIOS manually");
         return used;
     }
@@ -239,8 +239,7 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
 
     if (!bythos_command_exists("dmidecode")) {
         for (size_t i = 0; i < slot_count && used < max_results; i++) {
-            results[used++] = make_result(slots[i].name, CHECK_SKIP,
-                "dmidecode not available");
+            EMIT_SKIP_TOOL_INSTALL(slots[i].name, "dmidecode");
         }
         return used;
     }
@@ -257,11 +256,9 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
             strstr(buf, "requires root") != NULL;
         for (size_t i = 0; i < slot_count && used < max_results; i++) {
             if (needs_root) {
-                results[used++] = make_root_result(slots[i].name, CHECK_SKIP,
-                    "DMI hardware security not readable");
+                EMIT_SKIP_EXEC_ROOT(slots[i].name, "dmidecode");
             } else {
-                results[used++] = make_result(slots[i].name, CHECK_SKIP,
-                    "firmware password state not readable");
+                EMIT_SKIP_EXEC(slots[i].name, "dmidecode");
             }
         }
         return used;
@@ -272,9 +269,11 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
     for (size_t i = 0; i < slot_count && used < max_results; i++) {
         const char *pos = strstr(buf, slots[i].field);
         if (pos == NULL) {
-            results[used++] = make_result(slots[i].name, CHECK_SKIP,
-                table_present ? "field not present"
-                              : "DMI Type 24 not exposed by firmware");
+            if (table_present) {
+                EMIT_SKIP(slots[i].name, SKIP_REPORT_FIELD_ABSENT, "field not present");
+            } else {
+                EMIT_SKIP(slots[i].name, SKIP_FEATURE_ABSENT, "DMI Type 24 not exposed by firmware");
+            }
             continue;
         }
         pos += strlen(slots[i].field);
@@ -290,8 +289,7 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
                     pos[8] == ' '  || pos[8] == '\t')) {
             results[used++] = make_result(slots[i].name, CHECK_WARN, "not set");
         } else {
-            results[used++] = make_result(slots[i].name, CHECK_SKIP,
-                "state not recognized");
+            EMIT_SKIP_PARSE(slots[i].name, "dmidecode");
         }
     }
 
@@ -303,15 +301,13 @@ static size_t check_efivars_immutable(check_result_t *results, size_t max_result
     if (used >= max_results) return used;
 
     if (!bythos_file_exists(EFI_BOOT_ORDER_PATH)) {
-        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
-            "BootOrder variable not found");
+        EMIT_SKIP_FEATURE("EFI BootOrder immutable", "BootOrder variable");
         return used;
     }
 
     int fd = open(EFI_BOOT_ORDER_PATH, O_RDONLY);
     if (fd < 0) {
-        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
-            "BootOrder variable not readable");
+        EMIT_SKIP_EXEC("EFI BootOrder immutable", "BootOrder variable");
         return used;
     }
 
@@ -320,8 +316,7 @@ static size_t check_efivars_immutable(check_result_t *results, size_t max_result
     close(fd);
 
     if (ret < 0) {
-        results[used++] = make_result("EFI BootOrder immutable", CHECK_SKIP,
-            "immutable flag unreadable");
+        EMIT_SKIP_EXEC("EFI BootOrder immutable", "immutable flag");
         return used;
     }
 

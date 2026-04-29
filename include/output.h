@@ -28,6 +28,7 @@ typedef enum {
 void bythos_summary_add(posture_summary_t *summary, const check_result_t *result);
 check_state_t bythos_summary_state(const posture_summary_t *summary);
 const char *bythos_state_name(check_state_t state);
+const char *bythos_skip_reason_name(skip_reason_t reason);
 
 void bythos_render(
     bythos_render_mode_t mode,

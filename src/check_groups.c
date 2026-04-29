@@ -13,7 +13,7 @@ typedef size_t (*subgroup_check_fn)(check_result_t *, size_t);
 
 typedef struct {
     const char *name;
-    subgroup_check_fn fns[4];
+    subgroup_check_fn fns[5];
 } subgroup_def_t;
 
 static void subgroup_init(check_subgroup_t *sg, const char *name) {
@@ -45,33 +45,19 @@ static size_t run_subgroups(const subgroup_def_t *defs,
     return used;
 }
 
-static const subgroup_def_t physical_subgroups[] = {
-    {"usbguard",       {bythos_check_usbguard, bythos_check_usbguard_policy, NULL}},
-    {"desktop usb",    {bythos_check_desktop_usb, NULL}},
-    {"iommu",          {bythos_check_iommu, NULL}},
-    {"thunderbolt",    {bythos_check_bolt, NULL}},
-    {"bluetooth",      {bythos_check_bluetooth, NULL}},
-    {"platform debug", {bythos_check_dci, NULL}},
-    {"serial console", {bythos_check_serial_console, NULL}},
-    {NULL, {NULL}},
-};
-
 static const subgroup_def_t firmware_subgroups[] = {
     {"efi",               {bythos_check_efi, NULL}},
-    {"secure boot",       {bythos_check_sbctl, bythos_check_secureboot, NULL}},
+    {"secure boot",       {bythos_check_secureboot, bythos_check_sbctl, NULL}},
     {"boot chain",        {bythos_check_bios_boot, bythos_check_boot_chain, NULL}},
     {"esp",               {bythos_check_esp_posture, NULL}},
     {"tpm",               {bythos_check_tpm, NULL}},
     {"luks",              {bythos_check_luks, NULL}},
-    {"platform firmware", {bythos_check_bios_cntl, bythos_check_me_version, NULL}},
+    {"platform firmware", {bythos_check_bios_cntl, bythos_check_me_version, bythos_check_dci, bythos_check_chipsec, NULL}},
+    {"platform dma",      {bythos_check_iommu, bythos_check_bolt_dma, NULL}},
     {"microcode",         {bythos_check_microcode, NULL}},
     {"fwupd",             {bythos_check_fwupd, NULL}},
     {NULL, {NULL}},
 };
-
-size_t bythos_check_physical(check_subgroup_t *subgroups, size_t max_subgroups) {
-    return run_subgroups(physical_subgroups, subgroups, max_subgroups);
-}
 
 size_t bythos_check_firmware(check_subgroup_t *subgroups, size_t max_subgroups) {
     return run_subgroups(firmware_subgroups, subgroups, max_subgroups);

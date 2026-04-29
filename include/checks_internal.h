@@ -5,14 +5,10 @@
 
 #include "types.h"
 
-size_t bythos_check_usbguard(check_result_t *results, size_t max_results);
-size_t bythos_check_usbguard_policy(check_result_t *results, size_t max_results);
-size_t bythos_check_desktop_usb(check_result_t *results, size_t max_results);
 size_t bythos_check_iommu(check_result_t *results, size_t max_results);
-size_t bythos_check_bluetooth(check_result_t *results, size_t max_results);
 size_t bythos_check_dci(check_result_t *results, size_t max_results);
-size_t bythos_check_serial_console(check_result_t *results, size_t max_results);
-size_t bythos_check_bolt(check_result_t *results, size_t max_results);
+size_t bythos_check_chipsec(check_result_t *results, size_t max_results);
+size_t bythos_check_bolt_dma(check_result_t *results, size_t max_results);
 size_t bythos_check_efi(check_result_t *results, size_t max_results);
 size_t bythos_check_tpm(check_result_t *results, size_t max_results);
 size_t bythos_check_microcode(check_result_t *results, size_t max_results);

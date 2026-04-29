@@ -33,123 +33,18 @@ static bool read_tb_domain_attr(const char *attr, char *buffer, size_t size) {
     return false;
 }
 
-static bool read_thunderbolt_security_level(char *buffer, size_t size,
-                                            bool *controller_visible) {
-    if (controller_visible != NULL) *controller_visible = false;
-
-    DIR *dir = opendir(BOLT_SYSFS_BASE);
-    if (dir == NULL) return false;
-
-    bool saw_domain = false;
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (strncmp(entry->d_name, "domain", 6) != 0) continue;
-
-        saw_domain = true;
-
-        char path[PATH_MAX];
-        if (snprintf(path, sizeof(path), "%s/%s/security",
-                     BOLT_SYSFS_BASE, entry->d_name) >= (int)sizeof(path)) continue;
-
-        if (!bythos_file_exists(path)) continue;
-
-        if (controller_visible != NULL) *controller_visible = true;
-
-        if (bythos_read_file_text(path, buffer, size)) {
-            closedir(dir);
-            return true;
-        }
-    }
-
-    closedir(dir);
-    if (controller_visible != NULL) *controller_visible = saw_domain;
-    return false;
-}
-
-size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
+size_t bythos_check_bolt_dma(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    switch (bythos_probe_systemd_service("bolt.service")) {
-    case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-        EMIT_INSTALL("Thunderbolt policy service", "systemctl not available");
-        break;
-    case BYTHOS_SERVICE_STATE_ACTIVE:
-        EMIT("Thunderbolt policy service", CHECK_OK, "running");
-        break;
-    case BYTHOS_SERVICE_STATE_INACTIVE:
-        EMIT("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
-        break;
-    case BYTHOS_SERVICE_STATE_MISSING:
-        EMIT_INSTALL("Thunderbolt policy service", "not installed");
-        break;
-    default:
-        EMIT("Thunderbolt policy service", CHECK_SKIP, "state unavailable");
-        break;
-    }
-
-    /* Security level comes from sysfs; boltctl presence is not required. */
-    {
-        char level[64] = {0};
-        bool controller_visible = false;
-
-        if (!read_thunderbolt_security_level(level, sizeof(level),
-                                             &controller_visible)) {
-            if (!controller_visible) {
-                EMIT("Thunderbolt security level", CHECK_SKIP,
-                    "no Thunderbolt controller visible");
-            } else {
-                EMIT("Thunderbolt security level", CHECK_WARN,
-                    "Thunderbolt controller visible but security level unreadable");
-            }
+    char val[8] = {0};
+    if (!read_tb_domain_attr("iommu_dma_protection", val, sizeof(val))) {
+        EMIT_SKIP_FEATURE("Thunderbolt DMA protection", "iommu_dma_protection");
+    } else {
+        char *v = bythos_trim(val);
+        if (strcmp(v, "1") == 0) {
+            EMIT("Thunderbolt DMA protection", CHECK_OK, "pre-boot DMA active");
         } else {
-            char *trimmed = bythos_trim(level);
-
-            if (strcmp(trimmed, "secure") == 0 || strcmp(trimmed, "dponly") == 0) {
-                EMIT("Thunderbolt security level", CHECK_OK, trimmed);
-            } else if (strcmp(trimmed, "user") == 0) {
-                EMIT("Thunderbolt security level", CHECK_OK, "user (authorize on connect)");
-            } else if (strcmp(trimmed, "none") == 0) {
-                EMIT("Thunderbolt security level", CHECK_WARN, "none (all devices trusted)");
-            } else {
-                char detail[BYTHOS_DETAIL_MAX];
-                snprintf(detail, sizeof(detail), "%s (unknown level)", trimmed);
-                EMIT("Thunderbolt security level", CHECK_WARN, detail);
-            }
-        }
-    }
-
-    /* boltctl inventory is informational; do not over-parse human output. */
-    {
-        static const char *const boltctl_list_argv[] = {"boltctl", "list", NULL};
-        char buffer[4096] = {0};
-        int exit_status = -1;
-
-        if (!bythos_command_exists("boltctl")) {
-            EMIT_INSTALL("Thunderbolt devices (optional)", "boltctl not installed");
-        } else if (!bythos_capture_argv_status(boltctl_list_argv, buffer, sizeof(buffer), &exit_status) ||
-            exit_status != 0) {
-            EMIT("Thunderbolt devices (optional)", CHECK_SKIP, "unable to list Thunderbolt devices");
-        } else {
-            char *trimmed = bythos_trim(buffer);
-            if (*trimmed == '\0') {
-                EMIT("Thunderbolt devices (optional)", CHECK_OK, "none visible");
-            } else {
-                EMIT("Thunderbolt devices (optional)", CHECK_OK, "inventory available");
-            }
-        }
-    }
-
-    {
-        char val[8] = {0};
-        if (!read_tb_domain_attr("iommu_dma_protection", val, sizeof(val))) {
-            EMIT("Thunderbolt DMA protection", CHECK_SKIP, "iommu_dma_protection not available");
-        } else {
-            char *v = bythos_trim(val);
-            if (strcmp(v, "1") == 0) {
-                EMIT("Thunderbolt DMA protection", CHECK_OK, "pre-boot DMA active");
-            } else {
-                EMIT("Thunderbolt DMA protection", CHECK_WARN, "pre-boot DMA inactive");
-            }
+            EMIT("Thunderbolt DMA protection", CHECK_WARN, "pre-boot DMA inactive");
         }
     }
 

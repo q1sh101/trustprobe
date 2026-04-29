@@ -14,9 +14,24 @@ typedef enum {
     CHECK_SKIP = 3
 } check_state_t;
 
+typedef enum {
+    SKIP_NONE = 0,
+    SKIP_TOOL_ABSENT,
+    SKIP_FEATURE_ABSENT,
+    SKIP_EXEC_FAILED,
+    SKIP_PROBE_INDETERMINATE,
+    SKIP_REPORT_FIELD_ABSENT,
+    SKIP_OUTPUT_UNPARSEABLE,
+    SKIP_NOT_CONFIGURED,
+    SKIP_SUBJECT_ABSENT,
+    SKIP_HW_ABSENT,
+    SKIP_VENDOR_SCOPE
+} skip_reason_t;
+
 typedef struct {
     const char *name;
     check_state_t state;
+    skip_reason_t skip_reason;
     char detail[BYTHOS_DETAIL_MAX];
     bool requires_root;
     bool actionable;
@@ -42,6 +57,7 @@ static inline check_result_t make_result(const char *name, check_state_t state, 
     check_result_t result = {
         .name = name,
         .state = state,
+        .skip_reason = SKIP_NONE,
         .detail = {0},
         .requires_root = false,
         .actionable = false,
@@ -52,15 +68,21 @@ static inline check_result_t make_result(const char *name, check_state_t state, 
     return result;
 }
 
-static inline check_result_t make_root_result(const char *name, check_state_t state, const char *detail) {
-    check_result_t result = make_result(name, state, detail);
-    result.requires_root = true;
+static inline check_result_t make_skip(const char *name, skip_reason_t reason, const char *detail) {
+    check_result_t result = make_result(name, CHECK_SKIP, detail);
+    result.skip_reason = reason;
     return result;
 }
 
-static inline check_result_t make_install_result(const char *name, const char *detail) {
-    check_result_t result = make_result(name, CHECK_SKIP, detail);
+static inline check_result_t make_skip_actionable(const char *name, skip_reason_t reason, const char *detail) {
+    check_result_t result = make_skip(name, reason, detail);
     result.actionable = true;
+    return result;
+}
+
+static inline check_result_t make_skip_root(const char *name, skip_reason_t reason, const char *detail) {
+    check_result_t result = make_skip(name, reason, detail);
+    result.requires_root = true;
     return result;
 }
 
@@ -75,17 +97,101 @@ static inline const char *bythos_pl(size_t n, const char *singular, const char *
         } \
     } while (0)
 
-#define EMIT_ROOT(name_, state_, detail_) \
+#define EMIT_SKIP(name_, reason_, detail_) \
     do { \
         if (used < max_results) { \
-            results[used++] = make_root_result((name_), (state_), (detail_)); \
+            results[used++] = make_skip((name_), (reason_), (detail_)); \
         } \
     } while (0)
 
-#define EMIT_INSTALL(name_, detail_) \
+#define EMIT_SKIP_TOOL(name_, tool_) \
     do { \
         if (used < max_results) { \
-            results[used++] = make_install_result((name_), (detail_)); \
+            results[used++] = make_skip((name_), SKIP_TOOL_ABSENT, tool_ " not found"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_TOOL_INSTALL(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip_actionable((name_), SKIP_TOOL_ABSENT, "requires " tool_); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_FEATURE(name_, feat_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_FEATURE_ABSENT, feat_ " not available"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_EXEC(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_EXEC_FAILED, tool_ " query failed"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_EXEC_ROOT(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip_root((name_), SKIP_EXEC_FAILED, tool_ " query failed"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_PROBE(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_PROBE_INDETERMINATE, tool_ " result indeterminate"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_FIELD(name_, field_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_REPORT_FIELD_ABSENT, field_ " absent from " tool_ " output"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_PARSE(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_OUTPUT_UNPARSEABLE, tool_ " output not parseable"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_NOT_CONF(name_, tool_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip_actionable((name_), SKIP_NOT_CONFIGURED, tool_ " not configured"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_SUBJECT(name_, subj_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_SUBJECT_ABSENT, subj_ " not present on this host"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_SUBJECT_INSTALL(name_, subj_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip_actionable((name_), SKIP_SUBJECT_ABSENT, subj_ " not present on this host"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_HW(name_, hw_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_HW_ABSENT, hw_ " not detected"); \
+        } \
+    } while (0)
+
+#define EMIT_SKIP_VENDOR(name_, scope_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_skip((name_), SKIP_VENDOR_SCOPE, (scope_)); \
         } \
     } while (0)
 
