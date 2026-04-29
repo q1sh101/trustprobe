@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -12,11 +13,16 @@ enum {
     BYTHOS_EXIT_USAGE = 2,
 };
 
+#define BYTHOS_VERSION "0.1.0"
+
 static void usage(const char *argv0) {
     printf(
-        "usage: %s [--json] [all|physical|firmware]\n"
+        "usage: %s [all|physical|firmware] [-j|--json]\n"
         "\n"
-        "  --json    machine-readable JSON output (scripts, CI, pipes)\n"
+        "  -j, --json     machine-readable JSON output (scripts, CI, pipes)\n"
+        "  -h, --help     show this help and exit\n"
+        "  -V, --version  print version and exit\n"
+        "\n"
         "  all       run all trust boundary checks (default)\n"
         "  physical  run USB / desktop physical-trust checks\n"
         "  firmware  run Secure Boot / fwupd / signing checks\n",
@@ -47,24 +53,40 @@ int main(int argc, char **argv) {
 
     const char *selected_mode = NULL;
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+    static const struct option long_options[] = {
+        {"help",    no_argument, NULL, 'h'},
+        {"json",    no_argument, NULL, 'j'},
+        {"version", no_argument, NULL, 'V'},
+        {NULL, 0, NULL, 0},
+    };
+
+    int opt;
+    while ((opt = getopt_long(argc, argv, "hjV", long_options, NULL)) != -1) {
+        switch (opt) {
+        case 'h':
             usage(argv[0]);
             return 0;
-        } else if (strcmp(argv[i], "--json") == 0) {
-            if (render_mode != BYTHOS_RENDER_PLAIN) {
-                usage(argv[0]);
-                return BYTHOS_EXIT_USAGE;
-            }
+        case 'j':
             render_mode = BYTHOS_RENDER_JSON;
-        } else if (strcmp(argv[i], "all") == 0 ||
-                   strcmp(argv[i], "physical") == 0 ||
-                   strcmp(argv[i], "firmware") == 0) {
-            if (selected_mode != NULL) {
-                usage(argv[0]);
-                return BYTHOS_EXIT_USAGE;
-            }
-            selected_mode = argv[i];
+            break;
+        case 'V':
+            printf("bythos %s\n", BYTHOS_VERSION);
+            return 0;
+        default:
+            usage(argv[0]);
+            return BYTHOS_EXIT_USAGE;
+        }
+    }
+
+    if (optind < argc) {
+        if (optind + 1 != argc) {
+            usage(argv[0]);
+            return BYTHOS_EXIT_USAGE;
+        }
+        if (strcmp(argv[optind], "all") == 0 ||
+            strcmp(argv[optind], "physical") == 0 ||
+            strcmp(argv[optind], "firmware") == 0) {
+            selected_mode = argv[optind];
         } else {
             usage(argv[0]);
             return BYTHOS_EXIT_USAGE;

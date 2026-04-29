@@ -149,7 +149,7 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     }
 
     if (!bythos_command_exists("sha256sum")) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_SKIP,
+        results[used++] = make_install_result("BOOTX64.EFI (fallback)",
             "present; sha256sum unavailable for identity check");
         return used;
     }

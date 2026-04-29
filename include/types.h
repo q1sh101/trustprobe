@@ -19,6 +19,7 @@ typedef struct {
     check_state_t state;
     char detail[BYTHOS_DETAIL_MAX];
     bool requires_root;
+    bool actionable;
 } check_result_t;
 
 typedef struct {
@@ -43,6 +44,7 @@ static inline check_result_t make_result(const char *name, check_state_t state, 
         .state = state,
         .detail = {0},
         .requires_root = false,
+        .actionable = false,
     };
     if (detail != NULL) {
         snprintf(result.detail, sizeof(result.detail), "%s", detail);
@@ -53,6 +55,12 @@ static inline check_result_t make_result(const char *name, check_state_t state, 
 static inline check_result_t make_root_result(const char *name, check_state_t state, const char *detail) {
     check_result_t result = make_result(name, state, detail);
     result.requires_root = true;
+    return result;
+}
+
+static inline check_result_t make_install_result(const char *name, const char *detail) {
+    check_result_t result = make_result(name, CHECK_SKIP, detail);
+    result.actionable = true;
     return result;
 }
 
@@ -71,6 +79,13 @@ static inline const char *bythos_pl(size_t n, const char *singular, const char *
     do { \
         if (used < max_results) { \
             results[used++] = make_root_result((name_), (state_), (detail_)); \
+        } \
+    } while (0)
+
+#define EMIT_INSTALL(name_, detail_) \
+    do { \
+        if (used < max_results) { \
+            results[used++] = make_install_result((name_), (detail_)); \
         } \
     } while (0)
 

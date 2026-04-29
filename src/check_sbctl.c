@@ -17,17 +17,17 @@ size_t bythos_check_sbctl(check_result_t *results, size_t max_results) {
         bythos_sbctl_status_t sbctl_status = {0};
 
         if (!bythos_command_exists("sbctl")) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "not installed");
+            EMIT_INSTALL("sbctl (optional)", "not installed");
         } else if (!bythos_capture_argv_status(sbctl_status_argv, buffer, sizeof(buffer), &status)) {
             EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
         } else if (status != 0) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "not initialized");
+            EMIT_INSTALL("sbctl (optional)", "not initialized");
         } else if (!bythos_parse_sbctl_status(buffer, &sbctl_status)) {
             EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
         } else if (!sbctl_status.installed_known) {
             EMIT("sbctl (optional)", CHECK_SKIP, "status unavailable");
         } else if (!sbctl_status.installed) {
-            EMIT("sbctl (optional)", CHECK_SKIP, "not initialized");
+            EMIT_INSTALL("sbctl (optional)", "not initialized");
         } else if (!sbctl_status.owner_guid_present) {
             EMIT("sbctl (optional)", CHECK_SKIP, "owner GUID not visible");
         } else {

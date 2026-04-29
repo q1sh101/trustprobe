@@ -57,7 +57,7 @@ size_t bythos_check_serial_console(check_result_t *results, size_t max_results) 
         }
 
         if (systemctl_unavailable && !any_present && active_unit == NULL) {
-            EMIT("serial getty service", CHECK_SKIP, "systemctl not available");
+            EMIT_INSTALL("serial getty service", "systemctl not available");
         } else if (active_unit != NULL) {
             char detail[BYTHOS_DETAIL_MAX];
             snprintf(detail, sizeof(detail), "%s is active", active_unit);

@@ -71,7 +71,7 @@ size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
 
     switch (bythos_probe_systemd_service("bolt.service")) {
     case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-        EMIT("Thunderbolt policy service", CHECK_SKIP, "systemctl not available");
+        EMIT_INSTALL("Thunderbolt policy service", "systemctl not available");
         break;
     case BYTHOS_SERVICE_STATE_ACTIVE:
         EMIT("Thunderbolt policy service", CHECK_OK, "running");
@@ -80,7 +80,7 @@ size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
         EMIT("Thunderbolt policy service", CHECK_WARN, "installed but inactive");
         break;
     case BYTHOS_SERVICE_STATE_MISSING:
-        EMIT("Thunderbolt policy service", CHECK_SKIP, "not installed");
+        EMIT_INSTALL("Thunderbolt policy service", "not installed");
         break;
     default:
         EMIT("Thunderbolt policy service", CHECK_SKIP, "state unavailable");
@@ -125,7 +125,7 @@ size_t bythos_check_bolt(check_result_t *results, size_t max_results) {
         int exit_status = -1;
 
         if (!bythos_command_exists("boltctl")) {
-            EMIT("Thunderbolt devices (optional)", CHECK_SKIP, "boltctl not installed");
+            EMIT_INSTALL("Thunderbolt devices (optional)", "boltctl not installed");
         } else if (!bythos_capture_argv_status(boltctl_list_argv, buffer, sizeof(buffer), &exit_status) ||
             exit_status != 0) {
             EMIT("Thunderbolt devices (optional)", CHECK_SKIP, "unable to list Thunderbolt devices");

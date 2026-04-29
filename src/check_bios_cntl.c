@@ -17,6 +17,7 @@ size_t bythos_check_bios_cntl(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
+        results[used++] = make_result("Intel BIOS write protection", CHECK_SKIP, "Intel-only");
         return used;
     }
 

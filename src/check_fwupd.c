@@ -19,7 +19,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
 
     switch (bythos_probe_systemd_service("fwupd.service")) {
     case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-        EMIT("fwupd service", CHECK_SKIP, "systemctl not available");
+        EMIT_INSTALL("fwupd service", "systemctl not available");
         break;
     case BYTHOS_SERVICE_STATE_ACTIVE:
         EMIT("fwupd service", CHECK_OK, "running");
@@ -38,7 +38,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     {
         char enabled[32] = {0};
         if (!has_fwupdmgr) {
-            EMIT("LVFS remote", CHECK_SKIP, "fwupdmgr not installed");
+            EMIT_INSTALL("LVFS remote", "fwupdmgr not installed");
         } else if (!bythos_file_exists(lvfs_conf)) {
             EMIT("LVFS remote", CHECK_WARN, "lvfs.conf not found");
         } else if (!bythos_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
@@ -53,7 +53,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     {
         int devices = -1;
         if (!has_fwupdmgr) {
-            EMIT("firmware inventory", CHECK_SKIP, "fwupdmgr not installed");
+            EMIT_INSTALL("firmware inventory", "fwupdmgr not installed");
         } else if ((devices = bythos_run_argv_quiet(fwupd_devices_argv)) == 0) {
             EMIT("firmware inventory", CHECK_OK, "device list available");
         } else {
@@ -67,7 +67,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         bythos_fwupd_updates_status_t updates = BYTHOS_FWUPD_UPDATES_UNKNOWN;
 
         if (!has_fwupdmgr) {
-            EMIT("firmware update status", CHECK_SKIP, "fwupdmgr not installed");
+            EMIT_INSTALL("firmware update status", "fwupdmgr not installed");
         } else if (!bythos_capture_argv_status(fwupd_updates_argv, buffer, sizeof(buffer), &status)) {
             EMIT("firmware update status", CHECK_SKIP, "unable to query");
         } else if ((updates = bythos_parse_fwupd_updates(buffer, status)) == BYTHOS_FWUPD_UPDATES_NONE) {
@@ -86,7 +86,7 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         int hist_status = -1;
 
         if (!has_fwupdmgr) {
-            EMIT("firmware update history", CHECK_SKIP, "fwupdmgr not installed");
+            EMIT_INSTALL("firmware update history", "fwupdmgr not installed");
         } else if (!bythos_capture_argv_status(fwupd_history_argv, hist_buffer, sizeof(hist_buffer), &hist_status)) {
             EMIT("firmware update history", CHECK_SKIP, "history unavailable");
         } else if (hist_status != 0) {

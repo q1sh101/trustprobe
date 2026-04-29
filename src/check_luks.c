@@ -33,7 +33,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         bythos_lsblk_posture_t posture = {0};
 
         if (!bythos_command_exists("lsblk")) {
-            EMIT("LUKS block devices", CHECK_SKIP, "lsblk not available");
+            EMIT_INSTALL("LUKS block devices", "lsblk not available");
         } else if (!bythos_capture_argv_status(lsblk_argv, buffer, sizeof(buffer), &status)) {
             EMIT("LUKS block devices", CHECK_WARN, "unable to inspect block devices");
         } else if (status != 0) {
@@ -86,9 +86,9 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         int lsblk_status = -1;
 
         if (!bythos_command_exists("lsblk")) {
-            EMIT("LUKS TPM binding", CHECK_SKIP, "lsblk not available");
+            EMIT_INSTALL("LUKS TPM binding", "lsblk not available");
         } else if (!bythos_command_exists("cryptsetup")) {
-            EMIT("LUKS TPM binding", CHECK_SKIP, "cryptsetup not available");
+            EMIT_INSTALL("LUKS TPM binding", "cryptsetup not available");
         } else if (!bythos_capture_argv_status(lsblk_fstype_argv, lsblk_buf,
                                                     sizeof(lsblk_buf), &lsblk_status) ||
                    lsblk_status != 0) {
@@ -97,6 +97,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
             size_t luks_found = 0;
             size_t luks_no_token = 0;
             size_t luks_token_noparsed = 0;
+            size_t dump_ok = 0;
             uint32_t weakest_mask = 0xFFFFFFFFu;
             unsigned int weakest_popcount = 32u;
             bool any_token = false;
@@ -132,6 +133,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                                     (const char *const *)dump_argv,
                                     dump_buf, sizeof(dump_buf), &dump_status) &&
                                 dump_status == 0) {
+                                dump_ok++;
                                 if (strstr(dump_buf, "tpm2") != NULL) {
                                     any_token = true;
                                     uint32_t mask = 0;
@@ -159,6 +161,8 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
 
             if (luks_found == 0) {
                 EMIT("LUKS TPM binding", CHECK_SKIP, "no LUKS devices found");
+            } else if (dump_ok == 0) {
+                EMIT_ROOT("LUKS TPM binding", CHECK_SKIP, "luksDump not readable");
             } else if (!any_token) {
                 EMIT("LUKS TPM binding", CHECK_WARN, "LUKS device without TPM2 token");
             } else if (luks_no_token > 0) {

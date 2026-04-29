@@ -227,13 +227,21 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
 static size_t check_firmware_password(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    if (used >= max_results) {
-        return used;
-    }
+    static const struct {
+        const char *name;
+        const char *field;
+    } slots[] = {
+        {"Firmware admin password",     "Administrator Password Status:"},
+        {"Firmware power-on password",  "Power-On Password Status:"},
+        {"Firmware keyboard password",  "Keyboard Password Status:"},
+    };
+    static const size_t slot_count = sizeof(slots) / sizeof(slots[0]);
 
     if (!bythos_command_exists("dmidecode")) {
-        results[used++] = make_result("Firmware password", CHECK_SKIP,
-            "dmidecode not available");
+        for (size_t i = 0; i < slot_count && used < max_results; i++) {
+            results[used++] = make_result(slots[i].name, CHECK_SKIP,
+                "dmidecode not available");
+        }
         return used;
     }
 
@@ -243,41 +251,48 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
 
     bool captured = bythos_capture_argv_status(dmidecode_argv, buf, sizeof(buf), &exit_status);
     if (!captured || exit_status != 0) {
-        if (!captured ||
+        bool needs_root = !captured ||
             strstr(buf, "Permission denied") != NULL ||
             strstr(buf, "must be root") != NULL ||
-            strstr(buf, "requires root") != NULL) {
-            results[used++] = make_root_result("Firmware password", CHECK_SKIP,
-                "DMI hardware security not readable");
-        } else {
-            results[used++] = make_result("Firmware password", CHECK_SKIP,
-                "firmware password state not readable");
+            strstr(buf, "requires root") != NULL;
+        for (size_t i = 0; i < slot_count && used < max_results; i++) {
+            if (needs_root) {
+                results[used++] = make_root_result(slots[i].name, CHECK_SKIP,
+                    "DMI hardware security not readable");
+            } else {
+                results[used++] = make_result(slots[i].name, CHECK_SKIP,
+                    "firmware password state not readable");
+            }
         }
         return used;
     }
 
-    const char *field = "Administrator Password Status:";
-    const char *pos = strstr(buf, field);
-    if (pos == NULL) {
-        results[used++] = make_result("Firmware password", CHECK_SKIP,
-            "firmware password state not readable");
-        return used;
-    }
+    bool table_present = strstr(buf, "DMI type 24") != NULL;
 
-    pos += strlen(field);
-    while (*pos == ' ' || *pos == '\t') {
-        pos++;
-    }
-
-    if (strncmp(pos, "Enabled", 7) == 0) {
-        results[used++] = make_result("Firmware password", CHECK_OK,
-            "administrator password set");
-    } else if (strncmp(pos, "Disabled", 8) == 0) {
-        results[used++] = make_result("Firmware password", CHECK_WARN,
-            "no administrator password set");
-    } else {
-        results[used++] = make_result("Firmware password", CHECK_SKIP,
-            "firmware password state not readable");
+    for (size_t i = 0; i < slot_count && used < max_results; i++) {
+        const char *pos = strstr(buf, slots[i].field);
+        if (pos == NULL) {
+            results[used++] = make_result(slots[i].name, CHECK_SKIP,
+                table_present ? "field not present"
+                              : "DMI Type 24 not exposed by firmware");
+            continue;
+        }
+        pos += strlen(slots[i].field);
+        while (*pos == ' ' || *pos == '\t') {
+            pos++;
+        }
+        char term = pos[7];
+        if (strncmp(pos, "Enabled", 7) == 0 &&
+            (term == '\0' || term == '\n' || term == '\r' || term == ' ' || term == '\t')) {
+            results[used++] = make_result(slots[i].name, CHECK_OK, "set");
+        } else if (strncmp(pos, "Disabled", 8) == 0 &&
+                   (pos[8] == '\0' || pos[8] == '\n' || pos[8] == '\r' ||
+                    pos[8] == ' '  || pos[8] == '\t')) {
+            results[used++] = make_result(slots[i].name, CHECK_WARN, "not set");
+        } else {
+            results[used++] = make_result(slots[i].name, CHECK_SKIP,
+                "state not recognized");
+        }
     }
 
     return used;

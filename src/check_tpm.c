@@ -41,7 +41,7 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         int exit_status = -1;
 
         if (!bythos_command_exists("tpm2_pcrread")) {
-            EMIT("TPM PCR 7", CHECK_SKIP, "tpm2_pcrread not available");
+            EMIT_INSTALL("TPM PCR 7", "tpm2_pcrread not available");
         } else if (!bythos_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
             EMIT("TPM PCR 7", CHECK_SKIP, "PCR read failed");
@@ -63,7 +63,7 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         int exit_status = -1;
 
         if (!bythos_command_exists("tpm2_pcrread")) {
-            EMIT("TPM PCR 0", CHECK_SKIP, "tpm2_pcrread not available");
+            EMIT_INSTALL("TPM PCR 0", "tpm2_pcrread not available");
         } else if (!bythos_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
             EMIT("TPM PCR 0", CHECK_SKIP, "PCR read failed");

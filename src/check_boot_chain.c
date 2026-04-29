@@ -118,20 +118,19 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
     }
 
     if (!bythos_command_exists("pesign")) {
-        results[used++] = make_result("shim signature", CHECK_SKIP,
+        results[used++] = make_install_result("shim signature",
             "pesign not available");
         return used;
     }
 
-    const char *pesign_argv[] = {"pesign", "--list", "--in", shim_path, NULL};
+    const char *pesign_argv[] = {"pesign", "--show-signature", "--in", shim_path, NULL};
     char buf[2048] = {0};
     int exit_status = -1;
 
     if (!bythos_capture_argv_status(
             (const char *const *)pesign_argv, buf, sizeof(buf), &exit_status) ||
         exit_status != 0) {
-        results[used++] = make_result("shim signature", CHECK_WARN,
-            "shim signature unverifiable");
+        results[used++] = make_result("shim signature", CHECK_WARN, "unverifiable");
         return used;
     }
 
@@ -230,7 +229,7 @@ static size_t check_sbat_revocations(check_result_t *results, size_t max_results
     int exit_status = -1;
 
     if (!bythos_command_exists("mokutil")) {
-        results[used++] = make_result("SBAT revocations", CHECK_SKIP, "mokutil not installed");
+        results[used++] = make_install_result("SBAT revocations", "mokutil not installed");
         return used;
     }
 

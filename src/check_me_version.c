@@ -14,6 +14,7 @@ size_t bythos_check_me_version(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     if (bythos_cpu_vendor() != BYTHOS_CPU_VENDOR_INTEL) {
+        results[used++] = make_result("Intel ME version", CHECK_SKIP, "Intel-only");
         return used;
     }
 

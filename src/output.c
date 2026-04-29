@@ -246,7 +246,9 @@ static void bythos_print_json(
                 print_json_string(bythos_state_name(result->state));
                 printf(",\"detail\":");
                 print_json_string(result->detail);
-                printf(",\"requires_root\":%s}", result->requires_root ? "true" : "false");
+                printf(",\"requires_root\":%s,\"actionable\":%s}",
+                       result->requires_root ? "true" : "false",
+                       result->actionable ? "true" : "false");
             }
             printf("]}");
         }

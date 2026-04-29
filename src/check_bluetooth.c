@@ -37,7 +37,7 @@ size_t bythos_check_bluetooth(check_result_t *results, size_t max_results) {
     bool service_active = false;
     switch (bythos_probe_systemd_service("bluetooth.service")) {
     case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
-        EMIT("Bluetooth service", CHECK_SKIP, "systemctl not available");
+        EMIT_INSTALL("Bluetooth service", "systemctl not available");
         break;
     case BYTHOS_SERVICE_STATE_ACTIVE:
         service_active = true;
@@ -47,7 +47,7 @@ size_t bythos_check_bluetooth(check_result_t *results, size_t max_results) {
         EMIT("Bluetooth service", CHECK_OK, "installed but inactive");
         break;
     case BYTHOS_SERVICE_STATE_MISSING:
-        EMIT("Bluetooth service", CHECK_SKIP, "not installed");
+        EMIT_INSTALL("Bluetooth service", "not installed");
         break;
     default:
         EMIT("Bluetooth service", CHECK_SKIP, "state unavailable");
@@ -66,7 +66,7 @@ size_t bythos_check_bluetooth(check_result_t *results, size_t max_results) {
                     exit_status == 0;
 
     if (!btctl_ok) {
-        EMIT("Bluetooth discoverable", CHECK_SKIP, "bluetoothctl not available");
+        EMIT_INSTALL("Bluetooth discoverable", "bluetoothctl not available");
     } else if (strstr(output, "Discoverable: yes") != NULL) {
         EMIT("Bluetooth discoverable", CHECK_FAIL, "adapter advertising presence");
     } else {
@@ -74,7 +74,7 @@ size_t bythos_check_bluetooth(check_result_t *results, size_t max_results) {
     }
 
     if (!btctl_ok) {
-        EMIT("Bluetooth pairable", CHECK_SKIP, "bluetoothctl not available");
+        EMIT_INSTALL("Bluetooth pairable", "bluetoothctl not available");
     } else if (strstr(output, "Pairable: yes") != NULL) {
         EMIT("Bluetooth pairable", CHECK_WARN, "accepting new pairings");
     } else {

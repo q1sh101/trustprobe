@@ -31,7 +31,7 @@ size_t bythos_check_microcode(check_result_t *results, size_t max_results) {
     if (bythos_command_exists("spectre-meltdown-checker")) {
         EMIT("spectre-meltdown-checker (optional)", CHECK_OK, "installed");
     } else {
-        EMIT("spectre-meltdown-checker (optional)", CHECK_SKIP, "not installed");
+        EMIT_INSTALL("spectre-meltdown-checker (optional)", "not installed");
     }
 
     return used;

@@ -68,7 +68,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
 
     int sb_exit = -1;
     if (!has_mokutil) {
-        EMIT("secure boot state", CHECK_SKIP, "mokutil not installed");
+        EMIT_INSTALL("secure boot state", "mokutil not installed");
     } else if (!bythos_capture_argv_status(mokutil_state_argv, state_buffer, sizeof(state_buffer), &sb_exit) || sb_exit != 0) {
         EMIT("secure boot state", CHECK_WARN, "unable to query");
     /* Disabled Secure Boot is a direct posture regression for this layer, so keep it as FAIL. */
@@ -84,7 +84,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     }
 
     if (!has_mokutil) {
-        EMIT("secure boot setup mode", CHECK_SKIP, "mokutil not installed");
+        EMIT_INSTALL("secure boot setup mode", "mokutil not installed");
     } else if (!have_state_output) {
         EMIT("secure boot setup mode", CHECK_SKIP, "unavailable");
     } else if (bythos_secure_boot_setup_mode(state_buffer)) {
@@ -94,7 +94,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     }
 
     if (!has_mokutil) {
-        EMIT("platform key owner", CHECK_SKIP, "mokutil not installed");
+        EMIT_INSTALL("platform key owner", "mokutil not installed");
     } else if (!ownership.owner_readable) {
         EMIT("platform key owner", CHECK_SKIP, "owner unreadable");
     } else if (ownership.owner_parsed) {
@@ -104,7 +104,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     }
 
     if (!has_mokutil) {
-        EMIT("MOK enrollments", CHECK_SKIP, "mokutil not installed");
+        EMIT_INSTALL("MOK enrollments", "mokutil not installed");
     } else if (!ownership.enrollments_readable) {
         EMIT("MOK enrollments", CHECK_SKIP, "MOK list unreadable");
     } else {
@@ -193,7 +193,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     }
 
     if (!has_mokutil) {
-        EMIT("Secure Boot trust breadth", CHECK_SKIP, "mokutil not installed");
+        EMIT_INSTALL("Secure Boot trust breadth", "mokutil not installed");
     } else {
         static const char *const db_argv[] = {"mokutil", "--db", NULL};
         char db_buf[32768] = {0};
