@@ -10,10 +10,12 @@
 #include "firmware_parsers.h"
 #include "runtime.h"
 
-#define EFI_SIGDB_GUID "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
-#define EFI_DB_PATH    "/sys/firmware/efi/efivars/db-"  EFI_SIGDB_GUID
-#define EFI_DBX_PATH   "/sys/firmware/efi/efivars/dbx-" EFI_SIGDB_GUID
-#define EFI_SBAT_PATH  "/sys/firmware/efi/efivars/SbatLevel-605dab50-e046-4300-abb6-3dd810dd8b23"
+#define EFI_SIGDB_GUID   "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+#define EFI_SBAT_GUID    "605dab50-e046-4300-abb6-3dd810dd8b23"
+#define EFI_DB_PATH      "/sys/firmware/efi/efivars/db-"  EFI_SIGDB_GUID
+#define EFI_DBX_PATH     "/sys/firmware/efi/efivars/dbx-" EFI_SIGDB_GUID
+#define EFI_SBAT_RT_PATH "/sys/firmware/efi/efivars/SbatLevelRT-" EFI_SBAT_GUID
+#define EFI_SBAT_PATH    "/sys/firmware/efi/efivars/SbatLevel-"   EFI_SBAT_GUID
 
 static void check_sigdb_variable(const char *path, const char *name,
                                  bool efi_visible,
@@ -172,22 +174,31 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
 
     if (!efi_visible) {
         EMIT_SKIP_FEATURE("SBAT policy level", "EFI runtime");
-    } else if (!bythos_file_exists(EFI_SBAT_PATH)) {
-        EMIT_SKIP("SBAT policy level", SKIP_FEATURE_ABSENT, "SbatLevel variable absent; pre-SBAT firmware");
     } else {
-        unsigned char sbat_buf[256];
-        size_t sbat_len = 0;
-        if (!bythos_read_file_binary(EFI_SBAT_PATH, sbat_buf, sizeof(sbat_buf), &sbat_len) ||
-            sbat_len <= 4u) {
-            EMIT("SBAT policy level", CHECK_WARN, "SbatLevel variable unreadable");
+        const char *sbat_path = NULL;
+        if (bythos_file_exists(EFI_SBAT_RT_PATH)) {
+            sbat_path = EFI_SBAT_RT_PATH;
+        } else if (bythos_file_exists(EFI_SBAT_PATH)) {
+            sbat_path = EFI_SBAT_PATH;
+        }
+
+        if (sbat_path == NULL) {
+            EMIT_SKIP("SBAT policy level", SKIP_FEATURE_ABSENT, "SbatLevel variable absent; pre-SBAT firmware");
         } else {
-            char sbat_line[64] = {0};
-            if (!bythos_parse_sbat_level(sbat_buf, sbat_len, sbat_line, sizeof(sbat_line))) {
+            unsigned char sbat_buf[256];
+            size_t sbat_len = 0;
+            if (!bythos_read_file_binary(sbat_path, sbat_buf, sizeof(sbat_buf), &sbat_len) ||
+                sbat_len <= 4u) {
                 EMIT("SBAT policy level", CHECK_WARN, "SbatLevel variable unreadable");
             } else {
-                char detail[BYTHOS_DETAIL_MAX];
-                snprintf(detail, sizeof(detail), "SbatLevel: %s", sbat_line);
-                EMIT("SBAT policy level", CHECK_OK, detail);
+                char sbat_line[64] = {0};
+                if (!bythos_parse_sbat_level(sbat_buf, sbat_len, sbat_line, sizeof(sbat_line))) {
+                    EMIT("SBAT policy level", CHECK_WARN, "SbatLevel variable unreadable");
+                } else {
+                    char detail[BYTHOS_DETAIL_MAX];
+                    snprintf(detail, sizeof(detail), "SbatLevel: %s", sbat_line);
+                    EMIT("SBAT policy level", CHECK_OK, detail);
+                }
             }
         }
     }

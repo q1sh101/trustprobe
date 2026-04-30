@@ -1,9 +1,73 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
 
 #include "assert_helpers.h"
 #include "firmware_parsers.h"
+
+static void emit_u16_le(unsigned char *p, uint16_t v) {
+    p[0] = (unsigned char)(v & 0xFFu);
+    p[1] = (unsigned char)((v >> 8) & 0xFFu);
+}
+
+static void emit_u32_le(unsigned char *p, uint32_t v) {
+    p[0] = (unsigned char)(v & 0xFFu);
+    p[1] = (unsigned char)((v >> 8) & 0xFFu);
+    p[2] = (unsigned char)((v >> 16) & 0xFFu);
+    p[3] = (unsigned char)((v >> 24) & 0xFFu);
+}
+
+typedef struct {
+    const char *name;
+    const unsigned char *data;
+    size_t data_len;
+} pe_section_def_t;
+
+static size_t build_pe(unsigned char *out, size_t out_size,
+                       const pe_section_def_t *sections, size_t section_count,
+                       int32_t raw_data_overflow) {
+    const size_t pe_offset = 64;
+    const size_t section_table_offset = pe_offset + 4 + 20;
+    const size_t section_table_bytes = section_count * 40;
+    const size_t headers_end = section_table_offset + section_table_bytes;
+
+    size_t cursor = headers_end;
+    if (cursor > out_size) return 0;
+
+    memset(out, 0, headers_end);
+    out[0] = 'M';
+    out[1] = 'Z';
+    emit_u32_le(out + 0x3C, (uint32_t)pe_offset);
+    out[pe_offset]     = 'P';
+    out[pe_offset + 1] = 'E';
+    emit_u16_le(out + pe_offset + 4 + 2, (uint16_t)section_count);
+    emit_u16_le(out + pe_offset + 4 + 16, 0);
+
+    for (size_t i = 0; i < section_count; i++) {
+        unsigned char *hdr = out + section_table_offset + i * 40;
+        size_t name_len = strlen(sections[i].name);
+        if (name_len > 8) name_len = 8;
+        memcpy(hdr, sections[i].name, name_len);
+
+        emit_u32_le(hdr + 8, (uint32_t)sections[i].data_len);
+        emit_u32_le(hdr + 16, (uint32_t)sections[i].data_len);
+        emit_u32_le(hdr + 20, (uint32_t)cursor);
+
+        if (cursor + sections[i].data_len > out_size) return 0;
+        memcpy(out + cursor, sections[i].data, sections[i].data_len);
+        cursor += sections[i].data_len;
+    }
+
+    if (raw_data_overflow != 0 && section_count > 0) {
+        unsigned char *hdr = out + section_table_offset + (section_count - 1) * 40;
+        uint32_t inflated = (uint32_t)((int64_t)sections[section_count - 1].data_len + raw_data_overflow);
+        emit_u32_le(hdr + 8, inflated);
+        emit_u32_le(hdr + 16, inflated);
+    }
+
+    return cursor;
+}
 
 int main(void) {
     char owner[128] = {0};
@@ -223,6 +287,251 @@ int main(void) {
         bythos_sb_has_ms_ca("CN=My Custom CA\n"));
     assert_false("sb_ms_ca_null",
         bythos_sb_has_ms_ca(NULL));
+
+    {
+        static const char sbat_csv[] =
+            "sbat,1,SBAT Version,sbat,1,https://github.com/rhboot/shim/blob/main/SBAT.md\n"
+            "shim,4,UEFI shim,shim,15.7-1,https://example\n"
+            "grub,3,Free Software Foundation,grub,2.06,https://example\n"
+            "grub.debian,4,Debian,grub2,2.06-13,https://example\n";
+
+        unsigned char pe_buf[1024];
+        pe_section_def_t single[] = {
+            {".sbat", (const unsigned char *)sbat_csv, sizeof(sbat_csv) - 1}
+        };
+        size_t pe_len = build_pe(pe_buf, sizeof(pe_buf), single, 1, 0);
+        assert_true("pe_build_minimal", pe_len > 0);
+
+        unsigned char section_out[BYTHOS_SBAT_SECTION_MAX_BYTES];
+        size_t section_out_len = 0;
+        assert_true("pe_extract_sbat",
+            bythos_extract_pe_section(pe_buf, pe_len, ".sbat",
+                section_out, sizeof(section_out), &section_out_len));
+        assert_eq_sz("pe_extract_sbat_len", section_out_len, sizeof(sbat_csv) - 1);
+        assert_true("pe_extract_sbat_payload",
+            memcmp(section_out, sbat_csv, sizeof(sbat_csv) - 1) == 0);
+
+        bythos_sbat_entry_t entries[BYTHOS_SBAT_MAX_COMPONENTS];
+        size_t parsed = bythos_parse_sbat_csv((const char *)section_out, section_out_len,
+            entries, BYTHOS_SBAT_MAX_COMPONENTS);
+        assert_eq_sz("csv_parse_count", parsed, 4);
+        assert_true("csv_parse_sbat_name", strcmp(entries[0].component, "sbat") == 0);
+        assert_true("csv_parse_sbat_gen", entries[0].generation == 1);
+        assert_true("csv_parse_shim_name", strcmp(entries[1].component, "shim") == 0);
+        assert_true("csv_parse_shim_gen", entries[1].generation == 4);
+        assert_true("csv_parse_grub_name", strcmp(entries[2].component, "grub") == 0);
+        assert_true("csv_parse_grub_gen", entries[2].generation == 3);
+        assert_true("csv_parse_grub_debian_name",
+            strcmp(entries[3].component, "grub.debian") == 0);
+        assert_true("csv_parse_grub_debian_gen", entries[3].generation == 4);
+    }
+
+    {
+        static const char malformed_csv[] =
+            "shim,4,UEFI shim,shim,15.7,url\n"
+            "grub,not_a_number,FSF,grub,2.06,url\n"
+            "grub.debian,5,Debian,grub2,2.06-13,url\n";
+
+        bythos_sbat_entry_t entries[BYTHOS_SBAT_MAX_COMPONENTS];
+        size_t parsed = bythos_parse_sbat_csv(malformed_csv, sizeof(malformed_csv) - 1,
+            entries, BYTHOS_SBAT_MAX_COMPONENTS);
+        assert_eq_sz("csv_malformed_count", parsed, 2);
+        assert_true("csv_malformed_first", strcmp(entries[0].component, "shim") == 0);
+        assert_true("csv_malformed_second",
+            strcmp(entries[1].component, "grub.debian") == 0);
+        assert_true("csv_malformed_skipped_gen", entries[1].generation == 5);
+    }
+
+    {
+        static const char rev_text[] =
+            "sbat,1,2024010100\n"
+            "shim,4\n"
+            "grub,3\n"
+            "grub.debian,4\n";
+
+        bythos_sbat_entry_t entries[BYTHOS_SBAT_MAX_COMPONENTS];
+        size_t parsed = bythos_parse_sbat_revocation_minimums(rev_text,
+            entries, BYTHOS_SBAT_MAX_COMPONENTS);
+        assert_eq_sz("rev_parse_count", parsed, 4);
+        assert_true("rev_parse_sbat", strcmp(entries[0].component, "sbat") == 0);
+        assert_true("rev_parse_sbat_gen", entries[0].generation == 1);
+        assert_true("rev_parse_shim_gen", entries[1].generation == 4);
+        assert_true("rev_parse_grub_gen", entries[2].generation == 3);
+        assert_true("rev_parse_grub_debian_gen", entries[3].generation == 4);
+    }
+
+    {
+        bythos_sbat_entry_t installed[3] = {
+            {"shim", 4u, },
+            {"grub", 3u, },
+            {"grub.debian", 4u, },
+        };
+        bythos_sbat_entry_t revoked[2] = {
+            {"shim", 4u, },
+            {"grub.debian", 4u, },
+        };
+
+        bool any_violation = false;
+        for (size_t i = 0; i < 3 && !any_violation; i++) {
+            for (size_t j = 0; j < 2; j++) {
+                if (strcmp(installed[i].component, revoked[j].component) != 0) continue;
+                if (installed[i].generation < revoked[j].generation) {
+                    any_violation = true;
+                }
+                break;
+            }
+        }
+        assert_false("compare_ok_no_violation", any_violation);
+    }
+
+    {
+        bythos_sbat_entry_t installed[2] = {
+            {"shim", 4u, },
+            {"grub.debian", 3u, },
+        };
+        bythos_sbat_entry_t revoked[2] = {
+            {"shim", 4u, },
+            {"grub.debian", 4u, },
+        };
+
+        bool any_violation = false;
+        const char *failed_component = NULL;
+        for (size_t i = 0; i < 2 && !any_violation; i++) {
+            for (size_t j = 0; j < 2; j++) {
+                if (strcmp(installed[i].component, revoked[j].component) != 0) continue;
+                if (installed[i].generation < revoked[j].generation) {
+                    any_violation = true;
+                    failed_component = installed[i].component;
+                }
+                break;
+            }
+        }
+        assert_true("compare_warn_violation_detected", any_violation);
+        assert_true("compare_warn_failed_component",
+            failed_component != NULL && strcmp(failed_component, "grub.debian") == 0);
+    }
+
+    {
+        unsigned char pe_buf[512];
+        pe_section_def_t no_sbat[] = {
+            {".text", (const unsigned char *)"abcd", 4}
+        };
+        size_t pe_len = build_pe(pe_buf, sizeof(pe_buf), no_sbat, 1, 0);
+        assert_true("pe_build_no_sbat", pe_len > 0);
+
+        unsigned char section_out[BYTHOS_SBAT_SECTION_MAX_BYTES];
+        size_t section_out_len = 0;
+        assert_false("pe_extract_missing_sbat",
+            bythos_extract_pe_section(pe_buf, pe_len, ".sbat",
+                section_out, sizeof(section_out), &section_out_len));
+        assert_eq_sz("pe_extract_missing_len_zero", section_out_len, 0);
+    }
+
+    {
+        static const char sbat_csv[] = "shim,4,UEFI shim,shim,15.7,url\n";
+        unsigned char pe_buf[1024];
+        pe_section_def_t multi[] = {
+            {".text", (const unsigned char *)"AAAA", 4},
+            {".sbat", (const unsigned char *)sbat_csv, sizeof(sbat_csv) - 1},
+            {".data", (const unsigned char *)"BBBB", 4},
+        };
+        size_t pe_len = build_pe(pe_buf, sizeof(pe_buf), multi, 3, 0);
+        assert_true("pe_build_multi", pe_len > 0);
+
+        unsigned char section_out[BYTHOS_SBAT_SECTION_MAX_BYTES];
+        size_t section_out_len = 0;
+        assert_true("pe_extract_multi_sbat_middle",
+            bythos_extract_pe_section(pe_buf, pe_len, ".sbat",
+                section_out, sizeof(section_out), &section_out_len));
+        assert_eq_sz("pe_extract_multi_sbat_len", section_out_len, sizeof(sbat_csv) - 1);
+        assert_true("pe_extract_multi_sbat_payload",
+            memcmp(section_out, sbat_csv, sizeof(sbat_csv) - 1) == 0);
+    }
+
+    {
+        static const char sbat_csv[] = "shim,4,UEFI shim,shim,15.7,url\n";
+        unsigned char pe_buf[1024];
+        pe_section_def_t single[] = {
+            {".sbat", (const unsigned char *)sbat_csv, sizeof(sbat_csv) - 1}
+        };
+        size_t pe_len = build_pe(pe_buf, sizeof(pe_buf), single, 1, 4096);
+        assert_true("pe_build_truncated", pe_len > 0);
+
+        unsigned char section_out[BYTHOS_SBAT_SECTION_MAX_BYTES];
+        size_t section_out_len = 0;
+        assert_false("pe_extract_truncated_rejected",
+            bythos_extract_pe_section(pe_buf, pe_len, ".sbat",
+                section_out, sizeof(section_out), &section_out_len));
+    }
+
+    {
+        unsigned char oversized_payload[BYTHOS_SBAT_SECTION_MAX_BYTES + 64];
+        memset(oversized_payload, 'A', sizeof(oversized_payload));
+
+        unsigned char pe_buf[BYTHOS_SBAT_SECTION_MAX_BYTES + 256];
+        pe_section_def_t single[] = {
+            {".sbat", oversized_payload, sizeof(oversized_payload)}
+        };
+        size_t pe_len = build_pe(pe_buf, sizeof(pe_buf), single, 1, 0);
+        assert_true("pe_build_oversized", pe_len > 0);
+
+        unsigned char section_out[BYTHOS_SBAT_SECTION_MAX_BYTES];
+        size_t section_out_len = 999;
+        assert_false("pe_extract_oversized_rejected",
+            bythos_extract_pe_section(pe_buf, pe_len, ".sbat",
+                section_out, sizeof(section_out), &section_out_len));
+        assert_eq_sz("pe_extract_oversized_outsize_zero", section_out_len, 0);
+    }
+
+    {
+        bythos_sbat_entry_t installed[3] = {
+            {"shim", 4u, },
+            {"grub", 2u, },
+            {"grub.debian", 4u, },
+        };
+        bythos_sbat_entry_t revoked[2] = {
+            {"shim", 4u, },
+            {"grub", 3u, },
+        };
+
+        size_t failed_index = (size_t)-1;
+        for (size_t i = 0; i < 3 && failed_index == (size_t)-1; i++) {
+            unsigned int worst = 0;
+            bool any_match = false;
+            for (size_t j = 0; j < 2; j++) {
+                if (strcmp(installed[i].component, revoked[j].component) != 0) continue;
+                any_match = true;
+                if (revoked[j].generation > worst) worst = revoked[j].generation;
+            }
+            if (any_match && installed[i].generation < worst) {
+                failed_index = i;
+            }
+        }
+        assert_true("compare_multi_failed_index", failed_index == 1);
+        assert_true("compare_multi_failed_component",
+            strcmp(installed[failed_index].component, "grub") == 0);
+    }
+
+    {
+        bythos_sbat_entry_t installed[1] = { {"shim", 5u, } };
+        bythos_sbat_entry_t revoked[3] = {
+            {"shim", 4u, },
+            {"grub", 9u, },
+            {"shim", 6u, },
+        };
+
+        unsigned int worst = 0;
+        bool any_match = false;
+        for (size_t j = 0; j < 3; j++) {
+            if (strcmp(installed[0].component, revoked[j].component) != 0) continue;
+            any_match = true;
+            if (revoked[j].generation > worst) worst = revoked[j].generation;
+        }
+        assert_true("compare_dup_any_match", any_match);
+        assert_true("compare_dup_max_picked", worst == 6u);
+        assert_true("compare_dup_violation_detected",
+            installed[0].generation < worst);
+    }
 
     printf("firmware parsers ok\n");
     return 0;

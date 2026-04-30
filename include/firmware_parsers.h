@@ -46,4 +46,25 @@ bool bythos_sbat_entries_present(const char *text);
 /* returns true if mokutil --db output contains Microsoft 3rd Party UEFI CA */
 bool bythos_sb_has_ms_ca(const char *text);
 
+#define BYTHOS_SBAT_MAX_COMPONENTS 32
+#define BYTHOS_SBAT_SECTION_MAX_BYTES 8192
+#define BYTHOS_SBAT_COMPONENT_NAME_MAX 64
+
+typedef struct {
+    char component[BYTHOS_SBAT_COMPONENT_NAME_MAX];
+    unsigned int generation;
+} bythos_sbat_entry_t;
+
+bool bythos_extract_pe_section(const unsigned char *bin, size_t bin_len,
+                                  const char *section_name,
+                                  unsigned char *out_buf, size_t out_buf_size,
+                                  size_t *out_size);
+
+size_t bythos_parse_sbat_csv(const char *text, size_t text_len,
+                                bythos_sbat_entry_t *entries, size_t max_entries);
+
+size_t bythos_parse_sbat_revocation_minimums(const char *text,
+                                                bythos_sbat_entry_t *entries,
+                                                size_t max_entries);
+
 #endif

@@ -1,10 +1,20 @@
 #include <ctype.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "firmware_parsers.h"
+
+#define BYTHOS_PE_MAX_SECTIONS 96
+#define BYTHOS_PE_DOS_HEADER_BYTES 64
+#define BYTHOS_PE_LFANEW_OFFSET 0x3C
+#define BYTHOS_PE_COFF_HEADER_BYTES 20
+#define BYTHOS_PE_SECTION_HEADER_BYTES 40
+#define BYTHOS_PE_SECTION_NAME_BYTES 8
 
 static const char *const SECURE_BOOT_ENABLED_TEXT = "enabled";
 static const char *const SECURE_BOOT_DISABLED_TEXT = "disabled";
@@ -318,4 +328,154 @@ bool bythos_sb_has_ms_ca(const char *text) {
     /* covers CN=Microsoft Corporation UEFI CA 2011 and CN=Microsoft UEFI CA 2023 */
     return strstr(text, "Microsoft Corporation UEFI CA") != NULL ||
            strstr(text, "Microsoft UEFI CA") != NULL;
+}
+
+static uint16_t pe_read_u16_le(const unsigned char *p) {
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t pe_read_u32_le(const unsigned char *p) {
+    return (uint32_t)p[0] |
+           ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+bool bythos_extract_pe_section(const unsigned char *bin, size_t bin_len,
+                                  const char *section_name,
+                                  unsigned char *out_buf, size_t out_buf_size,
+                                  size_t *out_size) {
+    if (bin == NULL || section_name == NULL || out_buf == NULL || out_buf_size == 0) {
+        return false;
+    }
+    if (out_size != NULL) {
+        *out_size = 0;
+    }
+
+    if (bin_len < BYTHOS_PE_DOS_HEADER_BYTES) return false;
+    if (bin[0] != 'M' || bin[1] != 'Z') return false;
+
+    uint32_t pe_offset = pe_read_u32_le(bin + BYTHOS_PE_LFANEW_OFFSET);
+    if ((size_t)pe_offset > bin_len) return false;
+    if ((size_t)pe_offset + 4u + BYTHOS_PE_COFF_HEADER_BYTES > bin_len) return false;
+
+    const unsigned char *pe = bin + pe_offset;
+    if (pe[0] != 'P' || pe[1] != 'E' || pe[2] != 0 || pe[3] != 0) return false;
+
+    const unsigned char *coff = pe + 4;
+    uint16_t num_sections = pe_read_u16_le(coff + 2);
+    uint16_t opt_size     = pe_read_u16_le(coff + 16);
+
+    if (num_sections == 0 || num_sections > BYTHOS_PE_MAX_SECTIONS) return false;
+
+    size_t section_table_offset = (size_t)pe_offset + 4u +
+        BYTHOS_PE_COFF_HEADER_BYTES + (size_t)opt_size;
+    if (section_table_offset > bin_len) return false;
+
+    size_t section_table_bytes = (size_t)num_sections * BYTHOS_PE_SECTION_HEADER_BYTES;
+    if (section_table_bytes > bin_len - section_table_offset) return false;
+
+    size_t name_len = strlen(section_name);
+    if (name_len == 0 || name_len > BYTHOS_PE_SECTION_NAME_BYTES) return false;
+
+    for (uint16_t i = 0; i < num_sections; i++) {
+        const unsigned char *hdr = bin + section_table_offset +
+            (size_t)i * BYTHOS_PE_SECTION_HEADER_BYTES;
+
+        bool match = true;
+        for (size_t j = 0; j < BYTHOS_PE_SECTION_NAME_BYTES; j++) {
+            char want = j < name_len ? section_name[j] : '\0';
+            if ((char)hdr[j] != want) {
+                match = false;
+                break;
+            }
+        }
+        if (!match) continue;
+
+        uint32_t virtual_size     = pe_read_u32_le(hdr + 8);
+        uint32_t size_of_raw_data = pe_read_u32_le(hdr + 16);
+        uint32_t ptr_to_raw_data  = pe_read_u32_le(hdr + 20);
+
+        /* VirtualSize is the meaningful payload; SizeOfRawData may include file padding. */
+        uint32_t effective;
+        if (virtual_size > 0 && virtual_size <= size_of_raw_data) {
+            effective = virtual_size;
+        } else {
+            effective = size_of_raw_data;
+        }
+        if (effective == 0) return false;
+
+        if ((size_t)ptr_to_raw_data > bin_len) return false;
+        if ((size_t)effective > bin_len - (size_t)ptr_to_raw_data) return false;
+        if ((size_t)effective > out_buf_size) return false;
+
+        memcpy(out_buf, bin + ptr_to_raw_data, (size_t)effective);
+        if (out_size != NULL) {
+            *out_size = (size_t)effective;
+        }
+        return true;
+    }
+    return false;
+}
+
+size_t bythos_parse_sbat_csv(const char *text, size_t text_len,
+                                bythos_sbat_entry_t *entries, size_t max_entries) {
+    if (text == NULL || entries == NULL || max_entries == 0) return 0;
+
+    size_t count = 0;
+    size_t cursor = 0;
+    while (cursor < text_len && count < max_entries) {
+        if (text[cursor] == '\0') break;
+
+        size_t line_start = cursor;
+        size_t line_end = cursor;
+        while (line_end < text_len &&
+               text[line_end] != '\n' &&
+               text[line_end] != '\r' &&
+               text[line_end] != '\0') {
+            line_end++;
+        }
+        cursor = line_end;
+        if (cursor < text_len &&
+            (text[cursor] == '\n' || text[cursor] == '\r')) {
+            cursor++;
+        }
+
+        if (line_end == line_start) continue;
+
+        size_t comma1 = line_start;
+        while (comma1 < line_end && text[comma1] != ',') comma1++;
+        if (comma1 == line_end) continue;
+
+        size_t comp_len = comma1 - line_start;
+        if (comp_len == 0 || comp_len >= BYTHOS_SBAT_COMPONENT_NAME_MAX) continue;
+
+        size_t gen_start = comma1 + 1;
+        size_t gen_end = gen_start;
+        while (gen_end < line_end && text[gen_end] != ',') gen_end++;
+        size_t gen_len = gen_end - gen_start;
+        if (gen_len == 0 || gen_len > 16) continue;
+
+        char gen_str[20];
+        memcpy(gen_str, text + gen_start, gen_len);
+        gen_str[gen_len] = '\0';
+
+        char *endptr = NULL;
+        unsigned long gen = strtoul(gen_str, &endptr, 10);
+        if (endptr == NULL || *endptr != '\0') continue;
+        if (gen > UINT_MAX) continue;
+
+        memcpy(entries[count].component, text + line_start, comp_len);
+        entries[count].component[comp_len] = '\0';
+        entries[count].generation = (unsigned int)gen;
+        count++;
+    }
+    return count;
+}
+
+size_t bythos_parse_sbat_revocation_minimums(const char *text,
+                                                bythos_sbat_entry_t *entries,
+                                                size_t max_entries) {
+    if (text == NULL) return 0;
+    return bythos_parse_sbat_csv(text, strlen(text), entries, max_entries);
 }

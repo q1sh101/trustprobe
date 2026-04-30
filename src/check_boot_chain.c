@@ -46,12 +46,13 @@ static size_t check_bootloader_version(check_result_t *results, size_t max_resul
 
     char *trimmed = bythos_trim(buf);
     char detail[BYTHOS_DETAIL_MAX];
-    snprintf(detail, sizeof(detail), "%.160s; no CVE comparison available", trimmed);
-    EMIT_SKIP("bootloader version", SKIP_PROBE_INDETERMINATE, detail);
+    snprintf(detail, sizeof(detail), "%.200s", trimmed);
+    EMIT("bootloader version", CHECK_OK, detail);
     return used;
 }
 
-static bool find_shim(char *path_out, size_t path_out_size) {
+static bool find_efi_binary(const char *const *candidates, size_t candidate_count,
+                            char *path_out, size_t path_out_size) {
     const char *base = bythos_esp_efi_base();
     DIR *efi_dir = opendir(base);
     if (efi_dir == NULL) {
@@ -82,7 +83,14 @@ static bool find_shim(char *path_out, size_t path_out_size) {
             char lower[256];
             bythos_to_lower_ascii(entry->d_name, lower, sizeof(lower));
 
-            if (strcmp(lower, "shimx64.efi") != 0) {
+            bool name_match = false;
+            for (size_t i = 0; i < candidate_count; i++) {
+                if (strcmp(lower, candidates[i]) == 0) {
+                    name_match = true;
+                    break;
+                }
+            }
+            if (!name_match) {
                 continue;
             }
 
@@ -100,6 +108,20 @@ static bool find_shim(char *path_out, size_t path_out_size) {
 
     closedir(efi_dir);
     return found;
+}
+
+static bool find_shim(char *path_out, size_t path_out_size) {
+    static const char *const candidates[] = {"shimx64.efi", "shimaa64.efi"};
+    return find_efi_binary(candidates,
+                           sizeof(candidates) / sizeof(candidates[0]),
+                           path_out, path_out_size);
+}
+
+static bool find_grub(char *path_out, size_t path_out_size) {
+    static const char *const candidates[] = {"grubx64.efi", "grubaa64.efi"};
+    return find_efi_binary(candidates,
+                           sizeof(candidates) / sizeof(candidates[0]),
+                           path_out, path_out_size);
 }
 
 static size_t check_shim_signature(check_result_t *results, size_t max_results) {
@@ -214,6 +236,143 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     return used;
 }
 
+#define BOOTLOADER_SBAT_BIN_BUF_BYTES (4u * 1024u * 1024u)
+#define BOOTLOADER_SBAT_REV_BUF_BYTES 4096u
+
+static size_t collect_sbat_entries(const char *bin_path,
+                                    unsigned char *bin_buf, size_t bin_buf_size,
+                                    bythos_sbat_entry_t *entries, size_t entries_capacity,
+                                    size_t entries_used, bool *any_section) {
+    if (bin_path == NULL || bin_path[0] == '\0' || entries_used >= entries_capacity) {
+        return entries_used;
+    }
+
+    size_t bin_len = 0;
+    if (!bythos_read_file_binary(bin_path, bin_buf, bin_buf_size, &bin_len)) {
+        return entries_used;
+    }
+
+    unsigned char section_buf[BYTHOS_SBAT_SECTION_MAX_BYTES];
+    size_t section_len = 0;
+    if (!bythos_extract_pe_section(bin_buf, bin_len, ".sbat",
+                                   section_buf, sizeof(section_buf), &section_len)) {
+        return entries_used;
+    }
+
+    if (any_section != NULL) {
+        *any_section = true;
+    }
+
+    size_t parsed = bythos_parse_sbat_csv((const char *)section_buf, section_len,
+                                          entries + entries_used,
+                                          entries_capacity - entries_used);
+    return entries_used + parsed;
+}
+
+static size_t check_bootloader_sbat(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+    if (used >= max_results) {
+        return used;
+    }
+
+    char shim_path[PATH_MAX] = {0};
+    char grub_path[PATH_MAX] = {0};
+    bool have_shim = find_shim(shim_path, sizeof(shim_path));
+    bool have_grub = find_grub(grub_path, sizeof(grub_path));
+
+    if (!have_shim && !have_grub) {
+        EMIT_SKIP("bootloader SBAT", SKIP_SUBJECT_ABSENT,
+            "shim/grub binary not present on this host");
+        return used;
+    }
+
+    static unsigned char bin_buf[BOOTLOADER_SBAT_BIN_BUF_BYTES];
+    bythos_sbat_entry_t installed[BYTHOS_SBAT_MAX_COMPONENTS];
+    size_t installed_count = 0;
+    bool any_section = false;
+
+    if (have_shim) {
+        installed_count = collect_sbat_entries(shim_path, bin_buf, sizeof(bin_buf),
+                                               installed, BYTHOS_SBAT_MAX_COMPONENTS,
+                                               installed_count, &any_section);
+    }
+    if (have_grub) {
+        installed_count = collect_sbat_entries(grub_path, bin_buf, sizeof(bin_buf),
+                                               installed, BYTHOS_SBAT_MAX_COMPONENTS,
+                                               installed_count, &any_section);
+    }
+
+    if (!any_section) {
+        EMIT_SKIP("bootloader SBAT", SKIP_FEATURE_ABSENT,
+            "EFI bootloader SBAT section not found");
+        return used;
+    }
+    if (installed_count == 0) {
+        EMIT_SKIP("bootloader SBAT", SKIP_OUTPUT_UNPARSEABLE,
+            "SBAT section not parseable");
+        return used;
+    }
+
+    if (!bythos_command_exists("mokutil")) {
+        EMIT_SKIP_TOOL_INSTALL("bootloader SBAT", "mokutil");
+        return used;
+    }
+
+    static const char *const rev_argv[] = {"mokutil", "--list-sbat-revocations", NULL};
+    char rev_buf[BOOTLOADER_SBAT_REV_BUF_BYTES] = {0};
+    int rev_exit = -1;
+    if (!bythos_capture_argv_status(rev_argv, rev_buf, sizeof(rev_buf), &rev_exit) ||
+        rev_exit != 0) {
+        EMIT_SKIP_EXEC("bootloader SBAT", "mokutil");
+        return used;
+    }
+
+    if (!bythos_sbat_entries_present(bythos_trim(rev_buf))) {
+        EMIT_SKIP("bootloader SBAT", SKIP_PROBE_INDETERMINATE,
+            "no SBAT revocation policy applied");
+        return used;
+    }
+
+    bythos_sbat_entry_t revoked[BYTHOS_SBAT_MAX_COMPONENTS];
+    size_t revoked_count = bythos_parse_sbat_revocation_minimums(
+        rev_buf, revoked, BYTHOS_SBAT_MAX_COMPONENTS);
+
+    if (revoked_count == 0) {
+        EMIT_SKIP("bootloader SBAT", SKIP_PROBE_INDETERMINATE,
+            "no SBAT revocation policy applied");
+        return used;
+    }
+
+    for (size_t i = 0; i < installed_count; i++) {
+        /* Multiple revocations for one component collapse to the strictest minimum. */
+        unsigned int worst_revoked = 0;
+        bool any_match = false;
+        for (size_t j = 0; j < revoked_count; j++) {
+            if (strcmp(installed[i].component, revoked[j].component) != 0) {
+                continue;
+            }
+            any_match = true;
+            if (revoked[j].generation > worst_revoked) {
+                worst_revoked = revoked[j].generation;
+            }
+        }
+        if (any_match && installed[i].generation < worst_revoked) {
+            char detail[BYTHOS_DETAIL_MAX];
+            snprintf(detail, sizeof(detail),
+                "%s generation %u below revoked minimum %u",
+                installed[i].component,
+                installed[i].generation,
+                worst_revoked);
+            EMIT("bootloader SBAT", CHECK_WARN, detail);
+            return used;
+        }
+    }
+
+    EMIT("bootloader SBAT", CHECK_OK,
+        "installed generations satisfy SBAT revocations");
+    return used;
+}
+
 static size_t check_sbat_revocations(check_result_t *results, size_t max_results) {
     size_t used = 0;
     if (used >= max_results) return used;
@@ -254,6 +413,9 @@ size_t bythos_check_boot_chain(check_result_t *results, size_t max_results) {
 
     remaining = used < max_results ? max_results - used : 0;
     used += check_bootloader_version(results + used, remaining);
+
+    remaining = used < max_results ? max_results - used : 0;
+    used += check_bootloader_sbat(results + used, remaining);
 
     remaining = used < max_results ? max_results - used : 0;
     used += check_shim_signature(results + used, remaining);

@@ -272,7 +272,8 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
             if (table_present) {
                 EMIT_SKIP(slots[i].name, SKIP_REPORT_FIELD_ABSENT, "field not present");
             } else {
-                EMIT_SKIP(slots[i].name, SKIP_FEATURE_ABSENT, "DMI Type 24 not exposed by firmware");
+                EMIT_SKIP(slots[i].name, SKIP_FEATURE_ABSENT,
+                    "DMI Type 24 not exposed by firmware; check BIOS manually");
             }
             continue;
         }
