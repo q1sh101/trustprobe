@@ -13,10 +13,12 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
     const char *tpm_class_path = "/sys/class/tpm/tpm0";
     const char *tpm_major_path = "/sys/class/tpm/tpm0/tpm_version_major";
 
+    bool tpm_present = bythos_file_exists(tpm_class_path);
+
     {
         char major[64] = {0};
 
-        if (!bythos_file_exists(tpm_class_path)) {
+        if (!tpm_present) {
             EMIT("TPM presence", CHECK_WARN, "no TPM device visible");
         } else if (!bythos_read_file_text(tpm_major_path, major, sizeof(major))) {
             EMIT("TPM presence", CHECK_WARN, "TPM device visible but version unreadable");
@@ -40,7 +42,9 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         char buf[512] = {0};
         int exit_status = -1;
 
-        if (!bythos_command_exists("tpm2_pcrread")) {
+        if (!tpm_present) {
+            EMIT_SKIP_HW("TPM PCR 7", "TPM");
+        } else if (!bythos_command_exists("tpm2_pcrread")) {
             EMIT_SKIP_TOOL_INSTALL("TPM PCR 7", "tpm2-tools");
         } else if (!bythos_capture_argv_status(pcr7_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
@@ -62,7 +66,9 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
         char buf[512] = {0};
         int exit_status = -1;
 
-        if (!bythos_command_exists("tpm2_pcrread")) {
+        if (!tpm_present) {
+            EMIT_SKIP_HW("TPM PCR 0", "TPM");
+        } else if (!bythos_command_exists("tpm2_pcrread")) {
             EMIT_SKIP_TOOL_INSTALL("TPM PCR 0", "tpm2-tools");
         } else if (!bythos_capture_argv_status(pcr0_argv, buf, sizeof(buf), &exit_status) ||
                    exit_status != 0) {
@@ -81,24 +87,28 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
 
     {
         const char *evlog = "/sys/kernel/security/tpm0/ascii_bios_measurements";
-        FILE *f = fopen(evlog, "r");
 
-        if (f == NULL) {
-            EMIT_SKIP_FEATURE("TPM event log", "TPM event log");
+        if (!tpm_present) {
+            EMIT_SKIP_HW("TPM event log", "TPM");
         } else {
-            char line[512];
-            bool found = false;
-            while (fgets(line, sizeof(line), f) != NULL) {
-                if (strstr(line, "EV_S_CRTM_VERSION") != NULL) {
-                    found = true;
-                    break;
-                }
-            }
-            fclose(f);
-            if (found) {
-                EMIT("TPM event log", CHECK_OK, "CRTM version event present");
+            FILE *f = fopen(evlog, "r");
+            if (f == NULL) {
+                EMIT_SKIP_FEATURE("TPM event log", "TPM event log");
             } else {
-                EMIT("TPM event log", CHECK_WARN, "EV_S_CRTM_VERSION absent");
+                char line[512];
+                bool found = false;
+                while (fgets(line, sizeof(line), f) != NULL) {
+                    if (strstr(line, "EV_S_CRTM_VERSION") != NULL) {
+                        found = true;
+                        break;
+                    }
+                }
+                fclose(f);
+                if (found) {
+                    EMIT("TPM event log", CHECK_OK, "CRTM version event present");
+                } else {
+                    EMIT("TPM event log", CHECK_WARN, "EV_S_CRTM_VERSION absent");
+                }
             }
         }
     }

@@ -33,8 +33,29 @@ static bool read_tb_domain_attr(const char *attr, char *buffer, size_t size) {
     return false;
 }
 
+static bool tb_controller_present(void) {
+    DIR *dir = opendir(BOLT_SYSFS_BASE);
+    if (dir == NULL) return false;
+
+    bool found = false;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "domain", 6) == 0) {
+            found = true;
+            break;
+        }
+    }
+    closedir(dir);
+    return found;
+}
+
 size_t bythos_check_bolt_dma(check_result_t *results, size_t max_results) {
     size_t used = 0;
+
+    if (!tb_controller_present()) {
+        EMIT_SKIP_HW("Thunderbolt DMA protection", "Thunderbolt");
+        return used;
+    }
 
     char val[8] = {0};
     if (!read_tb_domain_attr("iommu_dma_protection", val, sizeof(val))) {

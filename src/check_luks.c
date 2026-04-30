@@ -85,7 +85,9 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         char lsblk_buf[4096] = {0};
         int lsblk_status = -1;
 
-        if (!bythos_command_exists("lsblk")) {
+        if (!bythos_file_exists("/sys/class/tpm/tpm0")) {
+            EMIT_SKIP_HW("LUKS TPM binding", "TPM");
+        } else if (!bythos_command_exists("lsblk")) {
             EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "util-linux");
         } else if (!bythos_command_exists("cryptsetup")) {
             EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "cryptsetup");

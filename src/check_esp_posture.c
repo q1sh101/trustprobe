@@ -60,6 +60,8 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
 
     size_t total = 0;
     char unexpected[64] = {0};
+    char names[BYTHOS_DETAIL_MAX] = {0};
+    size_t names_len = 0;
     struct dirent *entry;
 
     while ((entry = readdir(dir)) != NULL) {
@@ -71,8 +73,22 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
         /* FAT32 d_type is often DT_UNKNOWN; use stat to confirm directory */
         if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) continue;
         total++;
-        if (!bythos_esp_is_known_vendor(entry->d_name) && unexpected[0] == '\0') {
-            snprintf(unexpected, sizeof(unexpected), "%.60s", entry->d_name);
+        if (!bythos_esp_is_known_vendor(entry->d_name)) {
+            if (unexpected[0] == '\0') {
+                snprintf(unexpected, sizeof(unexpected), "%.60s", entry->d_name);
+            }
+            continue;
+        }
+        size_t name_len = strlen(entry->d_name);
+        size_t sep_len = names_len > 0 ? 2 : 0;
+        if (names_len + sep_len + name_len < sizeof(names)) {
+            if (sep_len > 0) {
+                names[names_len++] = ',';
+                names[names_len++] = ' ';
+            }
+            memcpy(names + names_len, entry->d_name, name_len);
+            names_len += name_len;
+            names[names_len] = '\0';
         }
     }
     closedir(dir);
@@ -86,8 +102,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
         results[used++] = make_result("EFI vendor directories", CHECK_WARN, detail);
     } else {
         char detail[BYTHOS_DETAIL_MAX];
-        snprintf(detail, sizeof(detail), "%zu vendor %s",
-            total, bythos_pl(total, "directory; recognized", "directories; all recognized"));
+        snprintf(detail, sizeof(detail), "%zu recognized: %.220s", total, names);
         results[used++] = make_result("EFI vendor directories", CHECK_OK, detail);
     }
     return used;
@@ -188,7 +203,8 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
     snprintf(path, sizeof(path), "%s/UpdateCapsule", bythos_esp_efi_base());
     DIR *dir = opendir(path);
     if (dir == NULL) {
-        EMIT_SKIP_SUBJECT("ESP UpdateCapsule", "UpdateCapsule directory");
+        results[used++] = make_result("ESP UpdateCapsule", CHECK_OK,
+            "no pending firmware capsules");
         return used;
     }
 
