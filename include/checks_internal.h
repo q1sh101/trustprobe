@@ -12,6 +12,7 @@ size_t bythos_check_bolt_dma(check_result_t *results, size_t max_results);
 size_t bythos_check_efi(check_result_t *results, size_t max_results);
 size_t bythos_check_tpm(check_result_t *results, size_t max_results);
 size_t bythos_check_microcode(check_result_t *results, size_t max_results);
+size_t bythos_check_memory_encryption(check_result_t *results, size_t max_results);
 size_t bythos_check_luks(check_result_t *results, size_t max_results);
 size_t bythos_check_fwupd(check_result_t *results, size_t max_results);
 size_t bythos_check_sbctl(check_result_t *results, size_t max_results);

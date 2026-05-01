@@ -17,19 +17,21 @@ size_t bythos_check_sbctl(check_result_t *results, size_t max_results) {
         bythos_sbctl_status_t sbctl_status = {0};
 
         if (!bythos_command_exists("sbctl")) {
-            EMIT_SKIP_TOOL_INSTALL("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP_TOOL_INSTALL("Secure Boot key management", "sbctl");
         } else if (!bythos_capture_argv_status(sbctl_status_argv, buffer, sizeof(buffer), &status)) {
-            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP_PROBE("Secure Boot key management", "sbctl");
         } else if (status != 0) {
-            EMIT_SKIP_NOT_CONF("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP("Secure Boot key management", SKIP_NOT_CONFIGURED,
+                "sbctl not configured; run: sudo sbctl setup --migrate");
         } else if (!bythos_parse_sbctl_status(buffer, &sbctl_status)) {
-            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP_PROBE("Secure Boot key management", "sbctl");
         } else if (!sbctl_status.installed_known) {
-            EMIT_SKIP_PROBE("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP_PROBE("Secure Boot key management", "sbctl");
         } else if (!sbctl_status.installed) {
-            EMIT_SKIP_NOT_CONF("Secure Boot key management (optional)", "sbctl");
+            EMIT_SKIP("Secure Boot key management", SKIP_NOT_CONFIGURED,
+                "sbctl not configured; run: sudo sbctl setup --migrate");
         } else if (!sbctl_status.owner_guid_present) {
-            EMIT_SKIP_FIELD("Secure Boot key management (optional)", "GUID", "sbctl");
+            EMIT_SKIP_FIELD("Secure Boot key management", "GUID", "sbctl");
         } else {
             char detail[192];
             if (sbctl_status.vendor_keys_present) {
@@ -42,7 +44,7 @@ size_t bythos_check_sbctl(check_result_t *results, size_t max_results) {
             } else {
                 snprintf(detail, sizeof(detail), "%s", "initialized; owner GUID present");
             }
-            EMIT("Secure Boot key management (optional)", CHECK_OK, detail);
+            EMIT("Secure Boot key management", CHECK_OK, detail);
         }
     }
 

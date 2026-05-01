@@ -124,6 +124,54 @@ bythos_cpu_vendor_t bythos_cpu_vendor(void) {
     return BYTHOS_CPU_VENDOR_UNKNOWN;
 }
 
+static bool extract_cpuinfo_flags_line(const char *cpuinfo,
+                                       char *out, size_t out_size) {
+    if (cpuinfo == NULL || out == NULL || out_size == 0) {
+        return false;
+    }
+
+    const char *cursor = cpuinfo;
+    while (*cursor != '\0') {
+        size_t line_len = strcspn(cursor, "\r\n");
+        if (line_len > 5 && strncmp(cursor, "flags", 5) == 0 &&
+            (cursor[5] == '\t' || cursor[5] == ' ' || cursor[5] == ':')) {
+            const char *colon = memchr(cursor, ':', line_len);
+            if (colon != NULL) {
+                colon++;
+                while (*colon == ' ' || *colon == '\t') colon++;
+                size_t value_len = (size_t)(cursor + line_len - colon);
+                if (value_len >= out_size) value_len = out_size - 1;
+                memcpy(out, colon, value_len);
+                out[value_len] = '\0';
+                return true;
+            }
+        }
+        cursor += line_len;
+        while (*cursor == '\r' || *cursor == '\n') cursor++;
+    }
+    return false;
+}
+
+void bythos_parse_memory_encryption_flags(const char *cpuinfo,
+                                              bythos_mem_enc_flags_t *flags) {
+    if (flags == NULL) {
+        return;
+    }
+    *flags = (bythos_mem_enc_flags_t){0};
+    if (cpuinfo == NULL) {
+        return;
+    }
+
+    char flags_line[2048];
+    if (!extract_cpuinfo_flags_line(cpuinfo, flags_line, sizeof(flags_line))) {
+        return;
+    }
+
+    flags->amd_sme        = token_present(flags_line, "sme");
+    flags->amd_sme_active = token_present(flags_line, "sme_active");
+    flags->intel_tme      = token_present(flags_line, "tme");
+}
+
 bool bythos_extract_microcode_revision(const char *text, char *buffer, size_t size) {
     if (text == NULL || buffer == NULL || size == 0) {
         return false;

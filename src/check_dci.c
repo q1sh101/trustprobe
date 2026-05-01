@@ -84,10 +84,12 @@ size_t bythos_check_dci(check_result_t *results, size_t max_results) {
 size_t bythos_check_chipsec(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
-    if (bythos_command_exists("chipsec")) {
-        EMIT("platform firmware deep audit (optional)", CHECK_OK, "installed");
+    if (bythos_command_exists("chipsec_main")) {
+        EMIT("platform firmware deep audit", CHECK_OK, "available: chipsec_main");
+    } else if (bythos_command_exists("chipsec")) {
+        EMIT("platform firmware deep audit", CHECK_OK, "available: chipsec");
     } else {
-        EMIT_SKIP_TOOL_INSTALL("platform firmware deep audit (optional)", "chipsec");
+        EMIT_SKIP_TOOL_INSTALL("platform firmware deep audit", "chipsec");
     }
 
     return used;

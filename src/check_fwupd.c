@@ -190,6 +190,9 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
 
     /* AMD-only */
     if (vendor == BYTHOS_CPU_VENDOR_AMD) {
+        EMIT_HSI("HSI: platform secure boot",
+                 "org.fwupd.hsi.Amd.PlatformSecureBoot",  "enabled",
+                 "enabled",                               "disabled");
         EMIT_HSI("HSI: SMM locked",
                  "org.fwupd.hsi.Amd.SmmLocked",          "locked",
                  "locked",                                "not locked");

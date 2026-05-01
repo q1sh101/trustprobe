@@ -72,6 +72,51 @@ int main(void) {
     assert_eq_int("pcr_compact_colon",
         bythos_pcr_zero_check("0: 0x0000000000000000000000000000000000000000000000000000000000000000\n", 0), 1);
 
+    {
+        bythos_mem_enc_flags_t flags = {0};
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: AuthenticAMD\nflags\t\t: fpu vme de sme sme_active sev\n",
+            &flags);
+        assert_true("mem_enc_amd_sme", flags.amd_sme);
+        assert_true("mem_enc_amd_sme_active", flags.amd_sme_active);
+        assert_false("mem_enc_amd_no_intel_tme", flags.intel_tme);
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: AuthenticAMD\nflags\t\t: fpu vme de sme sev\n",
+            &flags);
+        assert_true("mem_enc_amd_sme_only", flags.amd_sme);
+        assert_false("mem_enc_amd_sme_active_absent", flags.amd_sme_active);
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: GenuineIntel\nflags\t\t: fpu vme de tme x2apic\n",
+            &flags);
+        assert_true("mem_enc_intel_tme", flags.intel_tme);
+        assert_false("mem_enc_intel_no_amd_sme", flags.amd_sme);
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: AuthenticAMD\nflags\t\t: fpu vme de pse tsc msr pae\n",
+            &flags);
+        assert_false("mem_enc_no_flags_sme", flags.amd_sme);
+        assert_false("mem_enc_no_flags_tme", flags.intel_tme);
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: AuthenticAMD\nflags\t\t: fpu vme sme_active sev\n",
+            &flags);
+        assert_false("mem_enc_word_boundary_sme", flags.amd_sme);
+        assert_true("mem_enc_word_boundary_sme_active", flags.amd_sme_active);
+
+        bythos_parse_memory_encryption_flags(
+            "vendor_id\t: AuthenticAMD\nmodel name\t: AMD Ryzen 9 5900HX\n",
+            &flags);
+        assert_false("mem_enc_no_flags_line_sme", flags.amd_sme);
+        assert_false("mem_enc_no_flags_line_tme", flags.intel_tme);
+
+        bythos_parse_memory_encryption_flags(NULL, &flags);
+        assert_false("mem_enc_null_input_sme", flags.amd_sme);
+        bythos_parse_memory_encryption_flags("flags : sme\n", NULL);
+    }
+
     printf("silicon parsers ok\n");
     return 0;
 }

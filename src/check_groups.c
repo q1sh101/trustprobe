@@ -54,7 +54,7 @@ static const subgroup_def_t firmware_subgroups[] = {
     {"luks",              {bythos_check_luks, NULL}},
     {"platform firmware", {bythos_check_bios_cntl, bythos_check_me_version, bythos_check_dci, bythos_check_chipsec, NULL}},
     {"platform dma",      {bythos_check_iommu, bythos_check_bolt_dma, NULL}},
-    {"microcode",         {bythos_check_microcode, NULL}},
+    {"cpu",               {bythos_check_microcode, bythos_check_memory_encryption, NULL}},
     {"fwupd",             {bythos_check_fwupd, NULL}},
     {NULL, {NULL}},
 };
