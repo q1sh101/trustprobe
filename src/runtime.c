@@ -432,7 +432,7 @@ const char *bythos_esp_efi_base(void) {
     if (cached != NULL) {
         return cached;
     }
-    static const char *const candidates[] = {"/boot/efi/EFI", "/efi/EFI"};
+    static const char *const candidates[] = {"/boot/efi/EFI", "/efi/EFI", "/boot/EFI"};
     for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
         if (bythos_file_exists(candidates[i])) {
             cached = candidates[i];

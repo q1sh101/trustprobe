@@ -81,6 +81,83 @@ size_t bythos_count_nonempty_lines(const char *text) {
     return count;
 }
 
+size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
+                                       size_t max_names, size_t max_name_chars) {
+    if (text == NULL || buffer == NULL || size == 0 || max_names == 0 || max_name_chars == 0) {
+        return 0;
+    }
+    buffer[0] = '\0';
+
+    const size_t tail_reserve = 32;
+    if (size <= tail_reserve) {
+        return 0;
+    }
+    const size_t emit_limit = size - tail_reserve;
+
+    size_t emitted = 0;
+    size_t total_seen = 0;
+    size_t buf_used = 0;
+    const char *cursor = text;
+
+    while (*cursor != '\0') {
+        size_t line_len = strcspn(cursor, "\r\n");
+
+        const char *line_end = cursor + line_len;
+        const char *p = cursor;
+        while (p < line_end && (*p == ' ' || *p == '\t')) p++;
+
+        const char *space = NULL;
+        for (const char *q = p; q < line_end; q++) {
+            if (*q == ' ' || *q == '\t') { space = q; break; }
+        }
+
+        if (p < line_end && space != NULL) {
+            const char *name = space;
+            while (name < line_end && (*name == ' ' || *name == '\t')) name++;
+            if (name < line_end) {
+                size_t name_len = (size_t)(line_end - name);
+                while (name_len > 0 &&
+                       (name[name_len - 1] == ' ' || name[name_len - 1] == '\t' ||
+                        name[name_len - 1] == '\r')) {
+                    name_len--;
+                }
+                if (name_len > 0) {
+                    total_seen++;
+                    if (emitted < max_names) {
+                        size_t copy = name_len < max_name_chars ? name_len : max_name_chars;
+                        size_t sep_len = emitted > 0 ? 2 : 0;
+                        if (buf_used + sep_len + copy + 1 < emit_limit) {
+                            if (sep_len > 0) {
+                                buffer[buf_used++] = ',';
+                                buffer[buf_used++] = ' ';
+                            }
+                            memcpy(buffer + buf_used, name, copy);
+                            buf_used += copy;
+                            buffer[buf_used] = '\0';
+                            emitted++;
+                        }
+                    }
+                }
+            }
+        }
+
+        cursor = line_end;
+        while (*cursor == '\r' || *cursor == '\n') cursor++;
+    }
+
+    if (total_seen > emitted && emitted > 0) {
+        char tail[32];
+        int n = snprintf(tail, sizeof(tail), " (and %zu more)", total_seen - emitted);
+        if (n > 0 && (size_t)n < sizeof(tail) && buf_used + (size_t)n + 1 < size) {
+            memcpy(buffer + buf_used, tail, (size_t)n);
+            buf_used += (size_t)n;
+            buffer[buf_used] = '\0';
+        }
+    }
+
+    return total_seen;
+}
+
 bool bythos_extract_short_list_name(const char *text, char *buffer, size_t size) {
     if (text == NULL || buffer == NULL || size == 0) {
         return false;

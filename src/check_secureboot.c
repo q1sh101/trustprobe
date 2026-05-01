@@ -110,9 +110,13 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     } else if (!ownership.enrollments_readable) {
         EMIT_SKIP_EXEC("MOK enrollments", "mokutil");
     } else {
-        char detail[128];
+        char detail[BYTHOS_DETAIL_MAX];
         if (ownership.enrollment_count == 0) {
             EMIT("MOK enrollments", CHECK_OK, "none enrolled");
+        } else if (ownership.enrolled_names_parsed) {
+            snprintf(detail, sizeof(detail), "%zu enrolled: %.220s",
+                ownership.enrollment_count, ownership.enrolled_names);
+            EMIT("MOK enrollments", CHECK_OK, detail);
         } else {
             snprintf(detail, sizeof(detail), "%zu enrolled",
                 ownership.enrollment_count);
@@ -222,7 +226,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     }
 
     {
-        char mounts_buf[4096] = {0};
+        char mounts_buf[16384] = {0};
         if (!bythos_read_file_text("/proc/mounts", mounts_buf, sizeof(mounts_buf))) {
             EMIT_SKIP_EXEC("efivarfs mount mode", "proc/mounts");
         } else {

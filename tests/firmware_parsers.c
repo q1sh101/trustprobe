@@ -82,6 +82,58 @@ int main(void) {
     assert_false("extract_short_list_name_null",
         bythos_extract_short_list_name(NULL, owner, sizeof(owner)));
 
+    {
+        char joined[256] = {0};
+
+        assert_eq_sz("join_single",
+            bythos_join_short_list_names("abcd123456 Microsoft Corporation UEFI CA\n",
+                joined, sizeof(joined), 5, 32),
+            1);
+        assert_true("join_single_value",
+            strcmp(joined, "Microsoft Corporation UEFI CA") == 0);
+
+        assert_eq_sz("join_multi",
+            bythos_join_short_list_names(
+                "aaaa1111 Microsoft\n"
+                "bbbb2222 Razer\n"
+                "cccc3333 Ubuntu Shim\n",
+                joined, sizeof(joined), 5, 32),
+            3);
+        assert_true("join_multi_value",
+            strcmp(joined, "Microsoft, Razer, Ubuntu Shim") == 0);
+
+        assert_eq_sz("join_truncate_count",
+            bythos_join_short_list_names(
+                "aaaa Name1\n"
+                "bbbb Name2\n"
+                "cccc Name3\n"
+                "dddd Name4\n"
+                "eeee Name5\n"
+                "ffff Name6\n"
+                "gggg Name7\n",
+                joined, sizeof(joined), 3, 32),
+            7);
+        assert_true("join_truncate_value",
+            strcmp(joined, "Name1, Name2, Name3 (and 4 more)") == 0);
+
+        assert_eq_sz("join_empty",
+            bythos_join_short_list_names("", joined, sizeof(joined), 5, 32),
+            0);
+        assert_true("join_empty_value", joined[0] == '\0');
+
+        assert_eq_sz("join_per_name_truncate",
+            bythos_join_short_list_names(
+                "aaaa ThisNameIsExactlyThirtyTwoCharsLongPlus\n",
+                joined, sizeof(joined), 5, 16),
+            1);
+        assert_true("join_per_name_truncate_value",
+            strcmp(joined, "ThisNameIsExactl") == 0);
+
+        assert_eq_sz("join_no_space",
+            bythos_join_short_list_names("nospaceonline\n", joined, sizeof(joined), 5, 32),
+            0);
+    }
+
     assert_eq_int(
         "secure_boot_enabled",
         bythos_parse_secure_boot_state("SecureBoot enabled\n"),

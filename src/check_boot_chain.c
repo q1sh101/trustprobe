@@ -165,14 +165,55 @@ static size_t check_shim_signature(check_result_t *results, size_t max_results) 
     return used;
 }
 
+static void scan_initramfs_dir(const char *dir_path, int max_depth,
+                                size_t *count, bool *any_warn,
+                                char *warn_detail, size_t warn_detail_size) {
+    DIR *d = opendir(dir_path);
+    if (d == NULL) return;
+
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL) {
+        const char *name = entry->d_name;
+        if (name[0] == '.') continue;
+
+        char path[PATH_MAX];
+        if (snprintf(path, sizeof(path), "%s/%s", dir_path, name) >= (int)sizeof(path)) {
+            continue;
+        }
+
+        struct stat st;
+        if (stat(path, &st) != 0) continue;
+
+        if (S_ISREG(st.st_mode)) {
+            if (strncmp(name, "initrd", 6) != 0 && strncmp(name, "initramfs", 9) != 0) {
+                continue;
+            }
+            (*count)++;
+            if (!*any_warn) {
+                if (st.st_uid != 0) {
+                    *any_warn = true;
+                    snprintf(warn_detail, warn_detail_size,
+                        "initramfs not root-owned: %.200s", name);
+                } else if ((st.st_mode & (mode_t)0022) != 0) {
+                    *any_warn = true;
+                    snprintf(warn_detail, warn_detail_size,
+                        "initramfs world/group writable: %.200s", name);
+                }
+            }
+        } else if (S_ISDIR(st.st_mode) && max_depth > 0) {
+            scan_initramfs_dir(path, max_depth - 1, count, any_warn, warn_detail, warn_detail_size);
+        }
+    }
+    closedir(d);
+}
+
 static size_t check_initramfs_permissions(check_result_t *results, size_t max_results) {
     size_t used = 0;
     if (used >= max_results) {
         return used;
     }
 
-    DIR *boot = opendir("/boot");
-    if (boot == NULL) {
+    if (!bythos_file_exists("/boot")) {
         EMIT_SKIP_EXEC("initramfs permissions", "/boot");
         return used;
     }
@@ -181,39 +222,7 @@ static size_t check_initramfs_permissions(check_result_t *results, size_t max_re
     bool any_warn = false;
     char warn_detail[BYTHOS_DETAIL_MAX] = {0};
 
-    struct dirent *entry;
-    while ((entry = readdir(boot)) != NULL) {
-        const char *name = entry->d_name;
-        if (strncmp(name, "initrd", 6) != 0 && strncmp(name, "initramfs", 9) != 0) {
-            continue;
-        }
-
-        char path[PATH_MAX];
-        if (snprintf(path, sizeof(path), "/boot/%s", name) >= (int)sizeof(path)) {
-            continue;
-        }
-
-        struct stat st;
-        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
-            continue;
-        }
-
-        count++;
-
-        if (!any_warn) {
-            if (st.st_uid != 0) {
-                any_warn = true;
-                snprintf(warn_detail, sizeof(warn_detail),
-                    "initramfs not root-owned: %.200s", name);
-            } else if ((st.st_mode & (mode_t)0022) != 0) {
-                any_warn = true;
-                snprintf(warn_detail, sizeof(warn_detail),
-                    "initramfs world/group writable: %.200s", name);
-            }
-        }
-    }
-
-    closedir(boot);
+    scan_initramfs_dir("/boot", 3, &count, &any_warn, warn_detail, sizeof(warn_detail));
 
     if (used >= max_results) {
         return used;

@@ -31,6 +31,8 @@ typedef struct {
 
 size_t bythos_count_nonempty_lines(const char *text);
 bool bythos_extract_short_list_name(const char *text, char *buffer, size_t size);
+size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
+                                       size_t max_names, size_t max_name_chars);
 bythos_secure_boot_status_t bythos_parse_secure_boot_state(const char *text);
 bool bythos_secure_boot_setup_mode(const char *text);
 bythos_fwupd_updates_status_t bythos_parse_fwupd_updates(const char *text, int exit_status);

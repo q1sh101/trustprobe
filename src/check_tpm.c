@@ -1,12 +1,51 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "checks.h"
 #include "checks_internal.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
+
+static bool parse_max_auth_fail(const char *text, unsigned long *out) {
+    if (text == NULL || out == NULL) return false;
+
+    const char *key = strstr(text, "TPM2_PT_MAX_AUTH_FAIL");
+    if (key == NULL) return false;
+
+    const char *cursor = key + strlen("TPM2_PT_MAX_AUTH_FAIL");
+    const char *end = strstr(cursor + 1, "TPM2_PT_");
+    if (end == NULL) end = cursor + strlen(cursor);
+
+    const char *value_kw = strstr(cursor, "value:");
+    if (value_kw != NULL && value_kw < end) {
+        const char *p = value_kw + strlen("value:");
+        while (*p == ' ' || *p == '\t') p++;
+        if (isdigit((unsigned char)*p)) {
+            char *endptr = NULL;
+            unsigned long v = strtoul(p, &endptr, 10);
+            if (endptr != p) {
+                *out = v;
+                return true;
+            }
+        }
+    }
+
+    const char *hex = strstr(cursor, "0x");
+    if (hex != NULL && hex < end) {
+        char *endptr = NULL;
+        unsigned long v = strtoul(hex, &endptr, 16);
+        if (endptr != hex) {
+            *out = v;
+            return true;
+        }
+    }
+
+    return false;
+}
 
 size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -33,6 +72,43 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
                 EMIT("TPM presence", CHECK_WARN, detail);
             } else {
                 EMIT("TPM presence", CHECK_WARN, "TPM device visible but version not visible");
+            }
+        }
+    }
+
+    {
+        static const char *const getcap_argv[] = {"tpm2_getcap", "properties-variable", NULL};
+        char buf[4096] = {0};
+        int exit_status = -1;
+        unsigned long max_auth_fail = 0;
+
+        if (!tpm_present) {
+            EMIT_SKIP_HW("DA lockout", "TPM");
+        } else if (!bythos_command_exists("tpm2_getcap")) {
+            EMIT_SKIP_TOOL_INSTALL("DA lockout", "tpm2-tools");
+        } else if (!bythos_capture_argv_status(getcap_argv, buf, sizeof(buf), &exit_status) ||
+                   exit_status != 0) {
+            EMIT_SKIP_EXEC("DA lockout", "tpm2_getcap");
+        } else if (!parse_max_auth_fail(buf, &max_auth_fail)) {
+            EMIT_SKIP_PARSE("DA lockout", "tpm2_getcap");
+        } else {
+            char detail[BYTHOS_DETAIL_MAX];
+            if (max_auth_fail == 0u) {
+                EMIT("DA lockout", CHECK_WARN,
+                    "maxAuthFail=0; lockout disabled or misconfigured");
+            } else if (max_auth_fail <= 32u) {
+                snprintf(detail, sizeof(detail), "maxAuthFail=%lu; strict policy", max_auth_fail);
+                EMIT("DA lockout", CHECK_OK, detail);
+            } else if (max_auth_fail <= 255u) {
+                snprintf(detail, sizeof(detail), "maxAuthFail=%lu; moderate policy", max_auth_fail);
+                EMIT("DA lockout", CHECK_OK, detail);
+            } else if (max_auth_fail < 1000u) {
+                snprintf(detail, sizeof(detail), "maxAuthFail=%lu; loose policy", max_auth_fail);
+                EMIT("DA lockout", CHECK_WARN, detail);
+            } else {
+                snprintf(detail, sizeof(detail),
+                    "maxAuthFail=%lu; very loose policy (PIN brute-force risk)", max_auth_fail);
+                EMIT("DA lockout", CHECK_WARN, detail);
             }
         }
     }

@@ -61,6 +61,9 @@ static void assert_success(bythos_mok_ownership_t *ownership) {
     assert_true("ownership_enrollments_readable_true", ownership->enrollments_readable);
     assert_true("ownership_owner_value", strcmp(ownership->owner, "Example Platform Certificate") == 0);
     assert_eq_sz("ownership_enrollment_count_two", ownership->enrollment_count, 2);
+    assert_true("ownership_names_parsed_true", ownership->enrolled_names_parsed);
+    assert_true("ownership_names_value",
+        strcmp(ownership->enrolled_names, "Key One, Key Two") == 0);
 }
 
 static void assert_partial(bythos_mok_ownership_t *ownership) {
@@ -109,7 +112,7 @@ int main(void) {
         "  exit 0\n"
         "fi\n"
         "if [ \"$1\" = \"--list-enrolled\" ]; then\n"
-        "  printf 'Key One\\n\\nKey Two\\n'\n"
+        "  printf 'aaaa1111 Key One\\nbbbb2222 Key Two\\n'\n"
         "  exit 0\n"
         "fi\n"
         "exit 1\n",

@@ -10,7 +10,17 @@
 
 size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     size_t used = 0;
-    const char *lvfs_conf = "/etc/fwupd/remotes.d/lvfs.conf";
+    static const char *const lvfs_conf_candidates[] = {
+        "/etc/fwupd/remotes.d/lvfs.conf",
+        "/usr/share/fwupd/remotes.d/lvfs.conf",
+    };
+    const char *lvfs_conf = NULL;
+    for (size_t i = 0; i < sizeof(lvfs_conf_candidates) / sizeof(lvfs_conf_candidates[0]); i++) {
+        if (bythos_file_exists(lvfs_conf_candidates[i])) {
+            lvfs_conf = lvfs_conf_candidates[i];
+            break;
+        }
+    }
     bool has_fwupdmgr = false;
     static const char *fwupd_devices_argv[] = {"fwupdmgr", "get-devices", NULL};
     static const char *fwupd_updates_argv[] = {"fwupdmgr", "get-updates", NULL};
@@ -35,11 +45,29 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         break;
     }
 
+    switch (bythos_probe_systemd_service("fwupd-refresh.timer")) {
+    case BYTHOS_SERVICE_STATE_SYSTEMCTL_UNAVAILABLE:
+        EMIT_SKIP_TOOL_INSTALL("auto-refresh timer", "systemd");
+        break;
+    case BYTHOS_SERVICE_STATE_ACTIVE:
+        EMIT("auto-refresh timer", CHECK_OK, "active");
+        break;
+    case BYTHOS_SERVICE_STATE_INACTIVE:
+        EMIT("auto-refresh timer", CHECK_WARN, "inactive");
+        break;
+    case BYTHOS_SERVICE_STATE_MISSING:
+        EMIT_SKIP_SUBJECT("auto-refresh timer", "fwupd-refresh.timer");
+        break;
+    default:
+        EMIT_SKIP_PROBE("auto-refresh timer", "systemctl");
+        break;
+    }
+
     {
         char enabled[32] = {0};
         if (!has_fwupdmgr) {
             EMIT_SKIP_TOOL_INSTALL("LVFS remote", "fwupd");
-        } else if (!bythos_file_exists(lvfs_conf)) {
+        } else if (lvfs_conf == NULL) {
             EMIT("LVFS remote", CHECK_WARN, "lvfs.conf not found");
         } else if (!bythos_read_key_value(lvfs_conf, "Enabled", enabled, sizeof(enabled))) {
             EMIT("LVFS remote", CHECK_WARN, "Enabled key not found");

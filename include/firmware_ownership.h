@@ -11,6 +11,8 @@ typedef struct {
     char owner[128];
     bool enrollments_readable;
     size_t enrollment_count;
+    char enrolled_names[256];
+    bool enrolled_names_parsed;
 } bythos_mok_ownership_t;
 
 bool bythos_probe_mok_ownership(bythos_mok_ownership_t *ownership);

@@ -37,6 +37,11 @@ bool bythos_probe_mok_ownership(bythos_mok_ownership_t *ownership) {
     if (bythos_capture_argv_status(mokutil_enrolled_argv, mok_buffer, sizeof(mok_buffer), &mok_exit) && mok_exit == 0) {
         ownership->enrollments_readable = true;
         ownership->enrollment_count = bythos_count_nonempty_lines(mok_buffer);
+        size_t seen = bythos_join_short_list_names(
+            mok_buffer,
+            ownership->enrolled_names, sizeof(ownership->enrolled_names),
+            5, 32);
+        ownership->enrolled_names_parsed = (seen > 0 && ownership->enrolled_names[0] != '\0');
     }
 
     return true;

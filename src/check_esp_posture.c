@@ -11,6 +11,17 @@
 #include "esp_parsers.h"
 #include "runtime.h"
 
+static const struct {
+    const char *mount;
+    const char *efi_dir;
+} ESP_CANDIDATES[] = {
+    {"/boot/efi", "/boot/efi/EFI"},
+    {"/efi",      "/efi/EFI"},
+    {"/boot",     "/boot/EFI"},
+};
+
+#define ESP_CANDIDATE_COUNT (sizeof(ESP_CANDIDATES) / sizeof(ESP_CANDIDATES[0]))
+
 static size_t check_esp_permissions(check_result_t *results, size_t max_results) {
     size_t used = 0;
     struct stat st;
@@ -30,8 +41,17 @@ static size_t check_esp_permissions(check_result_t *results, size_t max_results)
 
     if (used >= max_results) return used;
 
-    if (stat("/boot/efi", &st) != 0 && stat("/efi", &st) != 0) {
-        EMIT_SKIP("ESP mount", SKIP_FEATURE_ABSENT, "not accessible at /boot/efi or /efi");
+    bool esp_found = false;
+    for (size_t i = 0; i < ESP_CANDIDATE_COUNT; i++) {
+        if (stat(ESP_CANDIDATES[i].mount, &st) == 0 &&
+            bythos_file_exists(ESP_CANDIDATES[i].efi_dir)) {
+            esp_found = true;
+            break;
+        }
+    }
+
+    if (!esp_found) {
+        EMIT_SKIP("ESP mount", SKIP_FEATURE_ABSENT, "not accessible at /boot/efi, /efi, or /boot");
         return used;
     }
     if (st.st_uid != 0) {
@@ -44,6 +64,45 @@ static size_t check_esp_permissions(check_result_t *results, size_t max_results)
         results[used++] = make_result("ESP ownership", CHECK_OK,
             "root-owned and not world-writable");
     }
+    return used;
+}
+
+static size_t check_esp_filesystem(check_result_t *results, size_t max_results) {
+    size_t used = 0;
+    if (used >= max_results) return used;
+
+    char mounts[16384] = {0};
+    if (!bythos_read_file_text("/proc/mounts", mounts, sizeof(mounts))) {
+        EMIT_SKIP_EXEC("ESP filesystem", "/proc/mounts");
+        return used;
+    }
+
+    for (size_t i = 0; i < ESP_CANDIDATE_COUNT; i++) {
+        if (!bythos_file_exists(ESP_CANDIDATES[i].efi_dir)) continue;
+
+        char marker[64];
+        snprintf(marker, sizeof(marker), " %s ", ESP_CANDIDATES[i].mount);
+        const char *line = strstr(mounts, marker);
+        if (line == NULL) continue;
+
+        const char *fstype_start = line + strlen(marker);
+        size_t fstype_len = strcspn(fstype_start, " \t\r\n");
+        if (fstype_len == 0 || fstype_len >= 64) continue;
+
+        char fstype[64] = {0};
+        memcpy(fstype, fstype_start, fstype_len);
+
+        if (strcmp(fstype, "vfat") == 0) {
+            EMIT("ESP filesystem", CHECK_OK, "vfat");
+        } else {
+            char detail[BYTHOS_DETAIL_MAX];
+            snprintf(detail, sizeof(detail), "unexpected: %s", fstype);
+            EMIT("ESP filesystem", CHECK_WARN, detail);
+        }
+        return used;
+    }
+
+    EMIT_SKIP("ESP filesystem", SKIP_FEATURE_ABSENT, "ESP mount-point not found");
     return used;
 }
 
@@ -109,6 +168,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
 }
 
 static bool find_shim(char *path_out, size_t size) {
+    static const char *const shim_names[] = {"shimx64.efi", "shimaa64.efi"};
     const char *esp_base = bythos_esp_efi_base();
     DIR *efi_dir = opendir(esp_base);
     if (efi_dir == NULL) return false;
@@ -116,12 +176,15 @@ static bool find_shim(char *path_out, size_t size) {
     struct dirent *vendor;
     while (!found && (vendor = readdir(efi_dir)) != NULL) {
         if (vendor->d_name[0] == '.') continue;
-        char candidate[PATH_MAX];
-        if (snprintf(candidate, sizeof(candidate), "%s/%s/shimx64.efi",
-                     esp_base, vendor->d_name) >= (int)sizeof(candidate)) continue;
-        if (bythos_file_exists(candidate)) {
-            snprintf(path_out, size, "%s", candidate);
-            found = true;
+        for (size_t i = 0; i < sizeof(shim_names) / sizeof(shim_names[0]); i++) {
+            char candidate[PATH_MAX];
+            if (snprintf(candidate, sizeof(candidate), "%s/%s/%s",
+                         esp_base, vendor->d_name, shim_names[i]) >= (int)sizeof(candidate)) continue;
+            if (bythos_file_exists(candidate)) {
+                snprintf(path_out, size, "%s", candidate);
+                found = true;
+                break;
+            }
         }
     }
     closedir(efi_dir);
@@ -133,40 +196,57 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
     if (used >= max_results) return used;
 
     /* UEFI fallback path used by attackers to persist across BootOrder resets */
+    static const char *const fallback_names[] = {
+        "BOOTX64.EFI", "bootx64.efi",
+        "BOOTAA64.EFI", "bootaa64.efi",
+    };
     const char *esp_base = bythos_esp_efi_base();
-    char upper[PATH_MAX], lower[PATH_MAX];
-    snprintf(upper, sizeof(upper), "%s/BOOT/BOOTX64.EFI", esp_base);
-    snprintf(lower, sizeof(lower), "%s/BOOT/bootx64.efi", esp_base);
-    const char *bootx64 = bythos_file_exists(upper) ? upper :
-                          bythos_file_exists(lower) ? lower : NULL;
+    char fallback_path[PATH_MAX] = {0};
+    const char *fallback_filename = NULL;
 
-    if (bootx64 == NULL) {
-        EMIT_SKIP_SUBJECT("BOOTX64.EFI (fallback)", "BOOTX64.EFI");
+    for (size_t i = 0; i < sizeof(fallback_names) / sizeof(fallback_names[0]); i++) {
+        char candidate[PATH_MAX];
+        if (snprintf(candidate, sizeof(candidate), "%s/BOOT/%s",
+                     esp_base, fallback_names[i]) >= (int)sizeof(candidate)) continue;
+        if (bythos_file_exists(candidate)) {
+            snprintf(fallback_path, sizeof(fallback_path), "%s", candidate);
+            fallback_filename = fallback_names[i];
+            break;
+        }
+    }
+
+    if (fallback_filename == NULL) {
+        EMIT_SKIP_SUBJECT("default boot fallback", "default boot fallback");
         return used;
     }
 
     char shim[PATH_MAX] = {0};
     if (!find_shim(shim, sizeof(shim))) {
-        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_SUBJECT_ABSENT, "present; shim not found for comparison");
+        char detail[BYTHOS_DETAIL_MAX];
+        snprintf(detail, sizeof(detail), "%s present; shim not found for comparison", fallback_filename);
+        EMIT_SKIP("default boot fallback", SKIP_SUBJECT_ABSENT, detail);
         return used;
     }
 
     struct stat st_boot, st_shim;
-    if (stat(bootx64, &st_boot) == 0 && stat(shim, &st_shim) == 0 &&
+    if (stat(fallback_path, &st_boot) == 0 && stat(shim, &st_shim) == 0 &&
         st_boot.st_ino == st_shim.st_ino && st_boot.st_dev == st_shim.st_dev) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_OK,
-            "matches installed shim (inode)");
+        char detail[BYTHOS_DETAIL_MAX];
+        snprintf(detail, sizeof(detail), "%s matches installed shim (inode)", fallback_filename);
+        results[used++] = make_result("default boot fallback", CHECK_OK, detail);
         return used;
     }
 
     if (!bythos_command_exists("sha256sum") && used < max_results) {
-        results[used++] = make_skip_actionable("BOOTX64.EFI (fallback)", SKIP_TOOL_ABSENT,
-            "present; sha256sum unavailable for identity check");
+        char detail[BYTHOS_DETAIL_MAX];
+        snprintf(detail, sizeof(detail), "%s present; sha256sum unavailable for identity check",
+                 fallback_filename);
+        results[used++] = make_skip_actionable("default boot fallback", SKIP_TOOL_ABSENT, detail);
         return used;
     }
 
-    const char *boot_argv[] = {"sha256sum", bootx64, NULL};
-    const char *shim_argv[] = {"sha256sum", shim,    NULL};
+    const char *boot_argv[] = {"sha256sum", fallback_path, NULL};
+    const char *shim_argv[] = {"sha256sum", shim,          NULL};
     char boot_out[256] = {0}, shim_out[256] = {0};
     int exit_a = -1, exit_b = -1;
 
@@ -174,23 +254,28 @@ static size_t check_bootx64(check_result_t *results, size_t max_results) {
                                         boot_out, sizeof(boot_out), &exit_a) || exit_a != 0 ||
         !bythos_capture_argv_status((const char *const *)shim_argv,
                                         shim_out, sizeof(shim_out), &exit_b) || exit_b != 0) {
-        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_EXEC_FAILED, "present; hash unavailable");
+        char detail[BYTHOS_DETAIL_MAX];
+        snprintf(detail, sizeof(detail), "%s present; hash unavailable", fallback_filename);
+        EMIT_SKIP("default boot fallback", SKIP_EXEC_FAILED, detail);
         return used;
     }
 
     char boot_hash[128] = {0}, shim_hash[128] = {0};
     if (!bythos_parse_sha256sum_line(boot_out, boot_hash, sizeof(boot_hash)) ||
         !bythos_parse_sha256sum_line(shim_out, shim_hash, sizeof(shim_hash))) {
-        EMIT_SKIP("BOOTX64.EFI (fallback)", SKIP_OUTPUT_UNPARSEABLE, "present; hash parse failed");
+        char detail[BYTHOS_DETAIL_MAX];
+        snprintf(detail, sizeof(detail), "%s present; hash parse failed", fallback_filename);
+        EMIT_SKIP("default boot fallback", SKIP_OUTPUT_UNPARSEABLE, detail);
         return used;
     }
 
+    char detail[BYTHOS_DETAIL_MAX];
     if (strcmp(boot_hash, shim_hash) == 0) {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_OK,
-            "matches installed shim (sha256)");
+        snprintf(detail, sizeof(detail), "%s matches installed shim (sha256)", fallback_filename);
+        results[used++] = make_result("default boot fallback", CHECK_OK, detail);
     } else {
-        results[used++] = make_result("BOOTX64.EFI (fallback)", CHECK_WARN,
-            "BOOTX64.EFI does not match installed shim");
+        snprintf(detail, sizeof(detail), "%s does not match installed shim", fallback_filename);
+        results[used++] = make_result("default boot fallback", CHECK_WARN, detail);
     }
     return used;
 }
@@ -239,6 +324,9 @@ size_t bythos_check_esp_posture(check_result_t *results, size_t max_results) {
 
     /* ESP not mounted — remaining checks have nothing to read */
     if (used > 0 && results[used - 1].state == CHECK_SKIP) return used;
+
+    remaining = max_results - used;
+    used += check_esp_filesystem(results + used, remaining);
 
     remaining = max_results - used;
     used += check_efi_vendor_dirs(results + used, remaining);
