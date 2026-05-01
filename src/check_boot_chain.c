@@ -368,7 +368,8 @@ static size_t check_bootloader_sbat(check_result_t *results, size_t max_results)
         if (any_match && installed[i].generation < worst_revoked) {
             char detail[BYTHOS_DETAIL_MAX];
             snprintf(detail, sizeof(detail),
-                "%s generation %u below revoked minimum %u",
+                "%.*s generation %u below revoked minimum %u",
+                (int)(BYTHOS_SBAT_COMPONENT_NAME_MAX - 1),
                 installed[i].component,
                 installed[i].generation,
                 worst_revoked);

@@ -1,0 +1,325 @@
+.TH BYTHOS 1 "" "bythos 0.1.0" "User Commands"
+.SH NAME
+bythos \- firmware trust posture auditor
+.SH SYNOPSIS
+.B bythos
+[\fB\-j\fR|\fB\-\-json\fR]
+.br
+.B bythos
+\fB\-h\fR|\fB\-\-help\fR
+.br
+.B bythos
+\fB\-V\fR|\fB\-\-version\fR
+.SH DESCRIPTION
+.B bythos
+inspects the firmware trust surface of a Linux host and reports each
+finding with an explicit posture state. It is read-only by design:
+classifications come from sysfs, procfs, EFI variables, and a selected
+set of optional userspace helpers, and no host configuration is ever
+modified. A single invocation produces a firmware posture snapshot for
+the running system, in either a colored text report or machine-readable
+JSON.
+.PP
+The audit groups its checks into ten subgroups under a single
+\fBfirmware\fR group:
+.IP \(bu 2
+.B efi
+\- UEFI runtime visibility, ESRT entry count
+.IP \(bu 2
+.B secure boot
+\- Secure Boot state and setup mode, platform key owner, MOK enrollments
+with cert names, db / dbx contents and sizes, SBAT policy level,
+Microsoft 3rd-party CA detection, efivarfs mount mode, sbctl key
+management state
+.IP \(bu 2
+.B boot chain
+\- bootloader version, bootloader SBAT generation versus current
+revocation policy, shim signature presence, initramfs permissions,
+SBAT revocation list visibility, EFI BootOrder USB / network / CD
+entries and BootNext one-shot override, EFI BootOrder immutable flag,
+BIOS USB boot firmware-attributes setting, SMBIOS Type 24 firmware
+admin / power-on / keyboard password slots
+.IP \(bu 2
+.B esp
+\- /boot and ESP ownership, ESP filesystem type, EFI vendor directory
+recognition, default boot fallback (BOOTX64.EFI / BOOTAA64.EFI) identity
+versus shim, pending UpdateCapsule files
+.IP \(bu 2
+.B tpm
+\- TPM 2.0 presence, dictionary-attack lockout policy, PCR 7 and PCR 0
+measurement state, TPM event log CRTM signal
+.IP \(bu 2
+.B luks
+\- LUKS volume visibility, LUKS TPM2 binding and PCR mask strength
+.IP \(bu 2
+.B platform firmware
+\- Intel BIOS write protection (BIOSWE / BLE / SMM_BWP), Intel ME
+firmware version, Intel DCI MSR state or AMD PSP visibility, chipsec
+deep audit availability
+.IP \(bu 2
+.B platform dma
+\- IOMMU group count, IOMMU posture from kernel cmdline, Thunderbolt
+pre-boot DMA protection
+.IP \(bu 2
+.B cpu
+\- CPU microcode revision, CPU vulnerability scanner availability,
+AMD SME / Intel TME memory encryption flags
+.IP \(bu 2
+.B fwupd
+\- fwupd service and refresh timer state, LVFS remote enablement,
+firmware inventory, update status, and history, curated Hardware
+Security Index (HSI) signals with vendor-conditional Intel and AMD
+entries
+.SH OPTIONS
+.TP
+.BR \-j ", " \-\-json
+Print machine-readable JSON instead of the colored text report.
+.TP
+.BR \-h ", " \-\-help
+Print a short usage summary and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version information and exit.
+.PP
+Any positional argument or unknown flag exits with status 2.
+.SH EXIT STATUS
+.TP
+.B 0
+No \fBfail\fR result.
+.TP
+.B 1
+At least one \fBfail\fR result.
+.TP
+.B 2
+Usage error (positional argument, unknown flag).
+.SH OUTPUT
+Each check result carries one of four states:
+.TP
+.B ok
+Expected posture observed.
+.TP
+.B warn
+Weaker posture, regression shy of fail, or unparseable signal.
+.TP
+.B fail
+Direct posture regression (for example, Secure Boot disabled).
+.TP
+.B skip
+Probe could not run. A missing optional dependency normally produces
+\fBskip\fR, not \fBwarn\fR.
+.PP
+Plain output begins with the banner and overall summary, then prints one
+flat block per subgroup. There is no per-subgroup or trailing recap.
+.PP
+JSON output mirrors the same data and adds three fields per result row:
+.TP
+.B skip_reason
+One of \fBNONE\fR (non-skip rows), \fBTOOL_ABSENT\fR,
+\fBFEATURE_ABSENT\fR, \fBEXEC_FAILED\fR, \fBPROBE_INDETERMINATE\fR,
+\fBREPORT_FIELD_ABSENT\fR, \fBOUTPUT_UNPARSEABLE\fR,
+\fBNOT_CONFIGURED\fR, \fBSUBJECT_ABSENT\fR, \fBHW_ABSENT\fR,
+\fBVENDOR_SCOPE\fR.
+.TP
+.B requires_root
+True when a non-root run skipped the row for lack of privilege.
+.TP
+.B actionable
+True when the skip is recoverable by installing or configuring a tool.
+.PP
+JSON is a single firmware-only snapshot. Top-level keys: \fBmode\fR,
+\fBbanner\fR, \fBgroups\fR, \fBoverall\fR, \fBexit_code\fR,
+\fBexit_meaning\fR.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+When set to a non-empty value, suppresses ANSI color in plain output.
+.TP
+.B TERM
+When set to \fBdumb\fR or \fBlinux\fR, ANSI color is suppressed.
+.SH FILES
+Read-only paths grouped by purpose. None are written.
+.PP
+.B EFI runtime and Secure Boot:
+.RS 2
+.TP
+.I /sys/firmware/efi
+.TP
+.I /sys/firmware/efi/esrt/entries
+.TP
+.I /sys/firmware/efi/efivars/db-*
+.TP
+.I /sys/firmware/efi/efivars/dbx-*
+.TP
+.I /sys/firmware/efi/efivars/SbatLevel*
+.TP
+.I /sys/firmware/efi/efivars/Boot*
+.RE
+.PP
+.B TPM:
+.RS 2
+.TP
+.I /sys/class/tpm/tpm0
+.TP
+.I /sys/class/tpm/tpm0/tpm_version_major
+.TP
+.I /sys/kernel/security/tpm0/ascii_bios_measurements
+.RE
+.PP
+.B Platform DMA and silicon:
+.RS 2
+.TP
+.I /sys/kernel/iommu_groups
+.TP
+.I /sys/bus/thunderbolt/devices
+.TP
+.I /sys/class/firmware-attributes
+.TP
+.I /sys/class/mei/mei0/fw_version
+.TP
+.I /dev/cpu/0/msr
+(root)
+.TP
+.I /sys/bus/pci/devices/0000:00:1f.0/config
+(root)
+.TP
+.I /sys/module/ccp
+(AMD PSP visibility)
+.RE
+.PP
+.B CPU and host:
+.RS 2
+.TP
+.I /proc/cpuinfo
+.TP
+.I /proc/cmdline
+.TP
+.I /proc/mounts
+.RE
+.PP
+.B ESP candidates:
+.RS 2
+.TP
+.I /boot/efi
+mount, validated by \fI/boot/efi/EFI\fR
+.TP
+.I /efi
+mount, validated by \fI/efi/EFI\fR
+.TP
+.I /boot
+mount, validated by \fI/boot/EFI\fR
+.RE
+.PP
+.B fwupd LVFS configuration:
+.RS 2
+.TP
+.I /etc/fwupd/remotes.d/lvfs.conf
+.TP
+.I /usr/share/fwupd/remotes.d/lvfs.conf
+.RE
+.PP
+.B LUKS block devices (dynamic):
+.RS 2
+.PP
+Each LUKS-formatted block device discovered via \fBlsblk\fR(8) is
+queried at \fI/dev/<name>\fR with \fBcryptsetup\fR(8) \fBluksDump\fR
+for TPM2 token information.
+.RE
+.SH DEPENDENCIES
+None of the tools below are required. Each is consulted only when
+present; absence demotes the dependent checks to \fBskip\fR rather
+than \fBfail\fR. Most are invoked to read posture data; the chipsec
+deep-audit helpers and \fBspectre-meltdown-checker\fR are detected for
+availability only, since their full audits are out of bythos scope.
+.IP \(bu 2
+.BR mokutil (1)
+\- Secure Boot state, setup mode, platform key owner, MOK enrollment
+list, db / dbx and SBAT revocation enumeration
+.IP \(bu 2
+.BR sbctl (8)
+\- sbctl key management initialization status
+.IP \(bu 2
+.BR fwupdmgr (1)
+\- LVFS remote check, firmware inventory, update status and history,
+curated HSI signal read
+.IP \(bu 2
+.BR systemctl (1)
+\- fwupd service and fwupd-refresh.timer state probes
+.IP \(bu 2
+.BR tpm2_getcap (1)
+\- TPM2 dictionary-attack lockout policy
+.IP \(bu 2
+.BR tpm2_pcrread (1)
+\- PCR 0 and PCR 7 measurement state
+.IP \(bu 2
+.BR cryptsetup (8)
+\- LUKS token enumeration and TPM2 PCR mask read
+.IP \(bu 2
+.BR lsblk (8)
+\- LUKS volume discovery
+.IP \(bu 2
+.BR pesign (1)
+\- shim binary signature presence
+.IP \(bu 2
+.BR sha256sum (1)
+\- fallback boot loader vs shim identity check
+.IP \(bu 2
+.BR dmidecode (8)
+\- SMBIOS Type 24 firmware password slots (root)
+.IP \(bu 2
+.BR grub-install (8)
+\- bootloader version probe (GRUB)
+.IP \(bu 2
+.BR grub2-install (8)
+\- bootloader version probe (GRUB on RPM-family distributions)
+.IP \(bu 2
+.BR bootctl (1)
+\- bootloader version probe (systemd-boot)
+.IP \(bu 2
+.BR chipsec_main (1)
+or legacy
+.BR chipsec (1)
+\- deep platform firmware audit availability signal
+.IP \(bu 2
+spectre-meltdown-checker
+\- CPU mitigation scanner availability signal
+.SH NOTES
+Most checks read sysfs and procfs surfaces that any audit user can
+already access. A small subset needs root for full coverage:
+.IP \(bu 2
+Intel DCI MSR (\fI/dev/cpu/0/msr\fR) for the debug-interface register.
+.IP \(bu 2
+Intel BIOS write protection (PCI config space at 00:1f.0) for the
+BIOS_CNTL register.
+.IP \(bu 2
+SMBIOS Type 24 firmware password slots via \fBdmidecode\fR(8).
+.IP \(bu 2
+LUKS TPM binding read via \fBcryptsetup\fR(8) \fBluksDump\fR on raw
+LUKS block devices.
+.PP
+Without root these probes emit \fBskip\fR with \fB(requires root)\fR in
+plain output and \fBrequires_root: true\fR in JSON.
+.SH EXAMPLES
+.nf
+bythos
+sudo bythos
+bythos --json | jq '.overall'
+NO_COLOR=1 bythos
+.fi
+.SH AUTHOR
+Giorgi Kishmareia (q1sh101).
+.SH SEE ALSO
+.BR fwupdmgr (1),
+.BR mokutil (1),
+.BR sbctl (8),
+.BR tpm2_getcap (1),
+.BR tpm2_pcrread (1),
+.BR cryptsetup (8),
+.BR lsblk (8),
+.BR pesign (1),
+.BR dmidecode (8),
+.BR systemctl (1),
+.BR grub-install (8),
+.BR grub2-install (8),
+.BR bootctl (1),
+.BR chipsec_main (1),
+.BR chipsec (1)

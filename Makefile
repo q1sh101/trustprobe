@@ -1,10 +1,26 @@
 CC ?= cc
-CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -Iinclude
+CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -Iinclude
 LDFLAGS ?=
+
+prefix ?= /usr/local
+bindir ?= $(prefix)/bin
+mandir ?= $(prefix)/share/man/man1
+DESTDIR ?=
+INSTALL ?= install
+
+# _FORTIFY_SOURCE redefines and skews sanitizer findings - drop under SANITIZE.
+ifdef SANITIZE
+override CFLAGS  += -fstack-protector-strong -fPIE -fsanitize=address,undefined -fno-omit-frame-pointer -g3
+override LDFLAGS += -pie -Wl,-z,relro,-z,now,-z,noexecstack -fsanitize=address,undefined
+else
+override CFLAGS  += -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE
+override LDFLAGS += -pie -Wl,-z,relro,-z,now,-z,noexecstack
+endif
 
 SRC := $(sort $(wildcard src/*.c))
 OBJ := $(SRC:.c=.o)
 BIN := bythos
+MAN1 := man/bythos.1
 FIRMWARE_TEST_BIN := tests/firmware_parsers
 FIRMWARE_OWNERSHIP_TEST_BIN := tests/firmware_ownership
 SILICON_TEST_BIN := tests/silicon_parsers
@@ -13,8 +29,11 @@ RUNTIME_TEST_BIN := tests/runtime_capture
 EFI_BOOT_TEST_BIN := tests/efi_boot_parsers
 ESP_TEST_BIN := tests/esp_posture
 SKIP_REASON_TEST_BIN := tests/skip_reason
+TEST_BINS := $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN) $(EFI_BOOT_TEST_BIN) $(ESP_TEST_BIN) $(SKIP_REASON_TEST_BIN)
 
-.PHONY: all clean run help-check firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test esp-test skip-reason-test
+.PHONY: all clean run help-check smoke ci-test test host-test asan install uninstall firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test esp-test skip-reason-test
+
+.DELETE_ON_ERROR:
 
 all: $(BIN)
 
@@ -23,6 +42,15 @@ $(BIN): $(OBJ)
 
 src/%.o: src/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+run: $(BIN)
+	./$(BIN)
+
+help-check: $(BIN)
+	./$(BIN) --help >/dev/null
+
+smoke: $(BIN)
+	bash tests/smoke.sh
 
 firmware-test: $(FIRMWARE_TEST_BIN)
 	./$(FIRMWARE_TEST_BIN)
@@ -48,35 +76,49 @@ esp-test: $(ESP_TEST_BIN)
 skip-reason-test: $(SKIP_REASON_TEST_BIN)
 	./$(SKIP_REASON_TEST_BIN)
 
-$(FIRMWARE_TEST_BIN): tests/firmware_parsers.c src/firmware_parsers.c include/firmware_parsers.h
-	$(CC) $(CFLAGS) tests/firmware_parsers.c src/firmware_parsers.c -o $@
+ci-test: help-check firmware-test firmware-ownership-test silicon-test storage-test runtime-test efi-boot-test esp-test skip-reason-test
 
-$(FIRMWARE_OWNERSHIP_TEST_BIN): tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c include/firmware_ownership.h include/runtime.h include/firmware_parsers.h
-	$(CC) $(CFLAGS) tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c -o $@
+test: ci-test
 
-$(SILICON_TEST_BIN): tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c include/silicon_parsers.h include/runtime.h
-	$(CC) $(CFLAGS) tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c -o $@
+host-test: smoke ci-test
 
-$(STORAGE_TEST_BIN): tests/storage_parsers.c src/storage_parsers.c include/storage_parsers.h
-	$(CC) $(CFLAGS) tests/storage_parsers.c src/storage_parsers.c -o $@
+asan:
+	$(MAKE) clean
+	ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1 \
+	$(MAKE) ci-test SANITIZE=1
+	$(MAKE) clean
 
-$(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h
-	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@
+install: $(BIN) $(MAN1)
+	$(INSTALL) -d "$(DESTDIR)$(bindir)" "$(DESTDIR)$(mandir)"
+	$(INSTALL) -m 0755 "$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"
+	$(INSTALL) -m 0644 "$(MAN1)" "$(DESTDIR)$(mandir)/bythos.1"
 
-$(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c include/efi_boot_parsers.h include/runtime.h
-	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c -o $@
+uninstall:
+	rm -f "$(DESTDIR)$(bindir)/$(BIN)" "$(DESTDIR)$(mandir)/bythos.1"
 
-$(ESP_TEST_BIN): tests/esp_posture.c src/esp_parsers.c include/esp_parsers.h
-	$(CC) $(CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@
+$(FIRMWARE_TEST_BIN): tests/firmware_parsers.c src/firmware_parsers.c include/firmware_parsers.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/firmware_parsers.c src/firmware_parsers.c -o $@ $(LDFLAGS)
 
-$(SKIP_REASON_TEST_BIN): tests/skip_reason.c src/output.c include/output.h include/types.h
-	$(CC) $(CFLAGS) tests/skip_reason.c src/output.c -o $@
+$(FIRMWARE_OWNERSHIP_TEST_BIN): tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c include/firmware_ownership.h include/runtime.h include/firmware_parsers.h tests/assert_helpers.h tests/test_harness.h
+	$(CC) $(CFLAGS) tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c -o $@ $(LDFLAGS)
 
-run: $(BIN)
-	./$(BIN)
+$(SILICON_TEST_BIN): tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c include/silicon_parsers.h include/runtime.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c -o $@ $(LDFLAGS)
 
-help-check: $(BIN)
-	./$(BIN) --help >/dev/null
+$(STORAGE_TEST_BIN): tests/storage_parsers.c src/storage_parsers.c include/storage_parsers.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/storage_parsers.c src/storage_parsers.c -o $@ $(LDFLAGS)
+
+$(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h tests/assert_helpers.h tests/test_harness.h
+	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@ $(LDFLAGS)
+
+$(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c include/efi_boot_parsers.h include/runtime.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c -o $@ $(LDFLAGS)
+
+$(ESP_TEST_BIN): tests/esp_posture.c src/esp_parsers.c include/esp_parsers.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@ $(LDFLAGS)
+
+$(SKIP_REASON_TEST_BIN): tests/skip_reason.c src/output.c include/output.h include/types.h tests/assert_helpers.h
+	$(CC) $(CFLAGS) tests/skip_reason.c src/output.c -o $@ $(LDFLAGS)
 
 clean:
-	rm -f src/*.o $(BIN) $(FIRMWARE_TEST_BIN) $(FIRMWARE_OWNERSHIP_TEST_BIN) $(SILICON_TEST_BIN) $(STORAGE_TEST_BIN) $(RUNTIME_TEST_BIN) $(EFI_BOOT_TEST_BIN) $(ESP_TEST_BIN) $(SKIP_REASON_TEST_BIN)
+	rm -f src/*.o *.o $(BIN) $(TEST_BINS)

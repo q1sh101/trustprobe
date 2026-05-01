@@ -276,7 +276,7 @@ int main(void) {
         bythos_hsi_find_result(hsi_sample, "org.fwupd.hsi.PlatformFused", NULL, sizeof(hsi_val)));
 
     {
-        /* target attribute positioned past 16384 bytes — catches buffer truncation bugs */
+        /* Keep the target past the old read limit to catch truncation. */
         char big[24576] = {0};
         size_t off = 0;
         off += (size_t)snprintf(big + off, sizeof(big) - off,

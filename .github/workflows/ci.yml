@@ -1,0 +1,104 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build + test (${{ matrix.cc }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ${{ matrix.cc }}
+
+      - name: ci-test (unit suite)
+        run: make ci-test CC=${{ matrix.cc }}
+
+      - name: smoke (host-portable assertions)
+        if: matrix.cc == 'gcc'
+        run: make smoke CC=${{ matrix.cc }}
+
+      - name: asan + ubsan
+        run: make asan CC=${{ matrix.cc }}
+
+  build-distro:
+    name: distro (${{ matrix.distro }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: fedora
+            image: fedora:latest
+            install: dnf install -y gcc make
+          - distro: debian
+            image: debian:stable
+            install: apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev make
+          - distro: arch
+            image: archlinux:latest
+            install: pacman -Sy --noconfirm gcc glibc make
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install toolchain
+        run: ${{ matrix.install }}
+
+      - name: ci-test (unit suite)
+        run: make ci-test
+
+  lint:
+    name: lint (man + smoke.sh)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install linters
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends shellcheck mandoc
+
+      - name: shellcheck tests/smoke.sh
+        run: shellcheck tests/smoke.sh
+
+      - name: mandoc lint man/bythos.1
+        run: mandoc -Tlint -Werror man/bythos.1
+
+  static-analysis:
+    name: static analysis (cppcheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: install cppcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cppcheck
+
+      - name: cppcheck src/ include/
+        run: |
+          cppcheck --error-exitcode=1 --enable=warning,performance,portability \
+                   --suppress=missingIncludeSystem --inline-suppr \
+                   --std=c11 -I include src/

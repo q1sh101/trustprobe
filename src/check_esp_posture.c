@@ -322,7 +322,7 @@ size_t bythos_check_esp_posture(check_result_t *results, size_t max_results) {
     remaining = max_results - used;
     used += check_esp_permissions(results + used, remaining);
 
-    /* ESP not mounted — remaining checks have nothing to read */
+    /* Without an ESP, the remaining checks have no input. */
     if (used > 0 && results[used - 1].state == CHECK_SKIP) return used;
 
     remaining = max_results - used;
