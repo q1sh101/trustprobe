@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <dirent.h>
 
 typedef enum {
     BYTHOS_SERVICE_STATE_UNKNOWN = 0,
@@ -18,9 +19,13 @@ bool bythos_command_exists(const char *name);
 bool bythos_file_exists(const char *path);
 bool bythos_read_file_text(const char *path, char *buffer, size_t size);
 bool bythos_read_file_binary(const char *path, unsigned char *buffer, size_t size, size_t *bytes_read);
+bool bythos_first_line_with_prefix(const char *path, const char *prefix, char *buffer, size_t size);
+bool bythos_find_mount_opts(const char *mounts, const char *fstype, char *opts_out, size_t opts_size);
 bool bythos_count_child_dirs(const char *path, size_t *count);
+struct dirent *bythos_readdir_safe(DIR *dir, int *err_out);
 bool bythos_read_key_value(const char *path, const char *key, char *buffer, size_t size);
 bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t size, int *exit_status);
+bool bythos_capture_argv_status_ex(const char *const argv[], char *buffer, size_t size, int *exit_status, bool *truncated);
 int bythos_run_argv_quiet(const char *const argv[]);
 bythos_service_state_t bythos_probe_systemd_service(const char *unit);
 const char *bythos_esp_efi_base(void);

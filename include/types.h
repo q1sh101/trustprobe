@@ -50,6 +50,7 @@ typedef struct {
     const char *name;
     check_result_t results[BYTHOS_MAX_SUBGROUP_RESULTS];
     size_t result_count;
+    bool truncated;
     posture_summary_t summary;
 } check_subgroup_t;
 

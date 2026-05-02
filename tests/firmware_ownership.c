@@ -24,15 +24,15 @@ static void with_mock_mokutil(
     snprintf(script_path, sizeof(script_path), "%s/mokutil", dir);
     write_executable(script_path, script);
 
-    const char *path = getenv("PATH");
+    const char *path = getenv("BYTHOS_PATH");
     char *saved_path = path == NULL ? NULL : strdup(path);
     if (path != NULL && saved_path == NULL) {
-        fprintf(stderr, "firmware ownership failure: could not save PATH\n");
+        fprintf(stderr, "firmware ownership failure: could not save BYTHOS_PATH\n");
         exit(1);
     }
 
-    if (setenv("PATH", dir, 1) != 0) {
-        fprintf(stderr, "firmware ownership failure: could not override PATH\n");
+    if (setenv("BYTHOS_PATH", dir, 1) != 0) {
+        fprintf(stderr, "firmware ownership failure: could not override BYTHOS_PATH\n");
         free(saved_path);
         exit(1);
     }
@@ -41,7 +41,7 @@ static void with_mock_mokutil(
     assert_true("probe_mok_ownership", bythos_probe_mok_ownership(&ownership));
     check(&ownership);
 
-    restore_path(saved_path);
+    restore_env("BYTHOS_PATH", saved_path);
     unlink(script_path);
     rmdir(dir);
 }
@@ -81,19 +81,19 @@ int main(void) {
         char template[] = "./tmp-bythos-mokutil-empty-XXXXXX";
         char *dir = mkdtemp(template);
         if (dir == NULL) {
-            fprintf(stderr, "firmware ownership failure: could not create empty PATH temp dir\n");
+            fprintf(stderr, "firmware ownership failure: could not create empty BYTHOS_PATH temp dir\n");
             return 1;
         }
 
-        const char *path = getenv("PATH");
+        const char *path = getenv("BYTHOS_PATH");
         char *saved_path = path == NULL ? NULL : strdup(path);
         if (path != NULL && saved_path == NULL) {
-            fprintf(stderr, "firmware ownership failure: could not save PATH for empty PATH case\n");
+            fprintf(stderr, "firmware ownership failure: could not save BYTHOS_PATH for empty case\n");
             return 1;
         }
 
-        if (setenv("PATH", dir, 1) != 0) {
-            fprintf(stderr, "firmware ownership failure: could not set empty PATH dir\n");
+        if (setenv("BYTHOS_PATH", dir, 1) != 0) {
+            fprintf(stderr, "firmware ownership failure: could not set empty BYTHOS_PATH dir\n");
             free(saved_path);
             return 1;
         }
@@ -101,7 +101,7 @@ int main(void) {
         assert_true("probe_mok_ownership_unavailable", bythos_probe_mok_ownership(&ownership));
         assert_unavailable(&ownership);
 
-        restore_path(saved_path);
+        restore_env("BYTHOS_PATH", saved_path);
         rmdir(dir);
     }
 

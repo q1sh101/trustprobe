@@ -123,7 +123,7 @@ static size_t check_efi_vendor_dirs(check_result_t *results, size_t max_results)
     size_t names_len = 0;
     struct dirent *entry;
 
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = bythos_readdir_safe(dir, NULL)) != NULL) {
         if (entry->d_name[0] == '.') continue;
         char path[PATH_MAX];
         if (snprintf(path, sizeof(path), "%s/%s", esp_base, entry->d_name) >=
@@ -174,7 +174,7 @@ static bool find_shim(char *path_out, size_t size) {
     if (efi_dir == NULL) return false;
     bool found = false;
     struct dirent *vendor;
-    while (!found && (vendor = readdir(efi_dir)) != NULL) {
+    while (!found && (vendor = bythos_readdir_safe(efi_dir, NULL)) != NULL) {
         if (vendor->d_name[0] == '.') continue;
         for (size_t i = 0; i < sizeof(shim_names) / sizeof(shim_names[0]); i++) {
             char candidate[PATH_MAX];
@@ -295,7 +295,7 @@ static size_t check_update_capsule(check_result_t *results, size_t max_results) 
 
     size_t count = 0;
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = bythos_readdir_safe(dir, NULL)) != NULL) {
         if (entry->d_name[0] != '.') count++;
     }
     closedir(dir);

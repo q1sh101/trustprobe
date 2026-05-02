@@ -135,7 +135,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     if (!efi_visible) {
         EMIT_SKIP_FEATURE("Secure Boot dbx size", "EFI runtime");
     } else {
-        unsigned char dbx_buf[8192];
+        unsigned char dbx_buf[65536];
         size_t dbx_len = 0;
         if (!bythos_read_file_binary(EFI_DBX_PATH, dbx_buf, sizeof(dbx_buf), &dbx_len) ||
             dbx_len <= 4u) {
@@ -158,7 +158,7 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
     if (!efi_visible) {
         EMIT_SKIP_FEATURE("Secure Boot db keys", "EFI runtime");
     } else {
-        unsigned char db_buf[8192];
+        unsigned char db_buf[65536];
         size_t db_len = 0;
         if (!bythos_read_file_binary(EFI_DB_PATH, db_buf, sizeof(db_buf), &db_len)) {
             EMIT_SKIP_EXEC("Secure Boot db keys", "EFI db");
@@ -211,11 +211,15 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
         EMIT_SKIP_TOOL_INSTALL("Secure Boot trust breadth", "mokutil");
     } else {
         static const char *const db_argv[] = {"mokutil", "--db", NULL};
-        char db_buf[32768] = {0};
+        char db_buf[131072] = {0};
         int db_exit = -1;
-        if (!bythos_capture_argv_status(db_argv, db_buf, sizeof(db_buf), &db_exit) ||
+        bool db_truncated = false;
+        if (!bythos_capture_argv_status_ex(db_argv, db_buf, sizeof(db_buf), &db_exit, &db_truncated) ||
             db_exit != 0) {
             EMIT_SKIP_EXEC("Secure Boot trust breadth", "mokutil");
+        } else if (db_truncated) {
+            EMIT("Secure Boot trust breadth", CHECK_WARN,
+                "mokutil output truncated; CA detection inconclusive, verify manually");
         } else if (bythos_sb_has_ms_ca(db_buf)) {
             EMIT("Secure Boot trust breadth", CHECK_WARN,
                 "Microsoft 3rd Party UEFI CA in db; widens trusted signer set");
@@ -227,21 +231,15 @@ size_t bythos_check_secureboot(check_result_t *results, size_t max_results) {
 
     {
         char mounts_buf[16384] = {0};
+        char opts[256] = {0};
         if (!bythos_read_file_text("/proc/mounts", mounts_buf, sizeof(mounts_buf))) {
             EMIT_SKIP_EXEC("efivarfs mount mode", "proc/mounts");
+        } else if (!bythos_find_mount_opts(mounts_buf, "efivarfs", opts, sizeof(opts))) {
+            EMIT_SKIP_FEATURE("efivarfs mount mode", "efivarfs");
+        } else if (strcmp(opts, "ro") == 0 || strncmp(opts, "ro,", 3) == 0) {
+            EMIT("efivarfs mount mode", CHECK_OK, "read-only");
         } else {
-            const char *marker = strstr(mounts_buf, " efivarfs ");
-            if (marker == NULL) {
-                EMIT_SKIP_FEATURE("efivarfs mount mode", "efivarfs");
-            } else {
-                const char *opts = marker + 10; /* skip " efivarfs " */
-                if (strncmp(opts, "ro,", 3) == 0 || strncmp(opts, "ro\n", 3) == 0 ||
-                    strncmp(opts, "ro ", 3) == 0 || strncmp(opts, "ro\0", 3) == 0) {
-                    EMIT("efivarfs mount mode", CHECK_OK, "read-only");
-                } else {
-                    EMIT("efivarfs mount mode", CHECK_WARN, "read-write; Secure Boot variables writable");
-                }
-            }
+            EMIT("efivarfs mount mode", CHECK_WARN, "read-write; firmware-side variable protection still applies");
         }
     }
 

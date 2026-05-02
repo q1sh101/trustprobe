@@ -136,7 +136,7 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                                     dump_buf, sizeof(dump_buf), &dump_status) &&
                                 dump_status == 0) {
                                 dump_ok++;
-                                if (strstr(dump_buf, "tpm2") != NULL) {
+                                if (strstr(dump_buf, "systemd-tpm2") != NULL) {
                                     any_token = true;
                                     uint32_t mask = 0;
                                     if (bythos_parse_luks_pcr_mask(dump_buf, &mask)) {

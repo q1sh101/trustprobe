@@ -17,8 +17,19 @@
 #include "runtime.h"
 
 #define BYTHOS_CMD_TIMEOUT_SEC 10
+#define BYTHOS_DEFAULT_PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 static volatile sig_atomic_t bythos_alarm_fired = 0;
+
+static const char *trusted_path(void) {
+#ifdef BYTHOS_ALLOW_PATH_OVERRIDE
+    const char *override = getenv("BYTHOS_PATH");
+    if (override != NULL && *override != '\0') {
+        return override;
+    }
+#endif
+    return BYTHOS_DEFAULT_PATH;
+}
 
 static void bythos_on_alarm(int sig) {
     (void)sig;
@@ -102,12 +113,7 @@ bool bythos_command_exists(const char *name) {
         return false;
     }
 
-    const char *path = getenv("PATH");
-    if (path == NULL || *path == '\0') {
-        return false;
-    }
-
-    char *path_copy = strdup(path);
+    char *path_copy = strdup(trusted_path());
     if (path_copy == NULL) {
         return false;
     }
@@ -182,6 +188,93 @@ bool bythos_read_file_binary(const char *path, unsigned char *buffer, size_t siz
     return true;
 }
 
+bool bythos_first_line_with_prefix(const char *path, const char *prefix,
+                                   char *buffer, size_t size) {
+    if (path == NULL || prefix == NULL || buffer == NULL || size == 0) {
+        return false;
+    }
+
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        return false;
+    }
+
+    size_t prefix_len = strlen(prefix);
+    char line[4096];
+    bool found = false;
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strncmp(line, prefix, prefix_len) == 0) {
+            unsigned char next = (unsigned char)line[prefix_len];
+            if (next == '\0' || !isalnum(next)) {
+                snprintf(buffer, size, "%s", line);
+                found = true;
+                break;
+            }
+        }
+    }
+
+    fclose(file);
+    return found;
+}
+
+struct dirent *bythos_readdir_safe(DIR *dir, int *err_out) {
+    if (dir == NULL) {
+        if (err_out != NULL) {
+            *err_out = EINVAL;
+        }
+        return NULL;
+    }
+    errno = 0;
+    struct dirent *entry = readdir(dir);
+    if (entry == NULL && err_out != NULL) {
+        *err_out = errno;
+    }
+    return entry;
+}
+
+bool bythos_find_mount_opts(const char *mounts, const char *fstype,
+                            char *opts_out, size_t opts_size) {
+    if (mounts == NULL || fstype == NULL || opts_out == NULL || opts_size == 0) {
+        return false;
+    }
+
+    size_t fstype_len = strlen(fstype);
+    const char *cursor = mounts;
+    while (*cursor != '\0') {
+        size_t line_len = strcspn(cursor, "\n");
+        const char *line_end = cursor + line_len;
+
+        const char *p = cursor;
+        while (p < line_end && *p != ' ' && *p != '\t') p++;
+        while (p < line_end && (*p == ' ' || *p == '\t')) p++;
+
+        while (p < line_end && *p != ' ' && *p != '\t') p++;
+        while (p < line_end && (*p == ' ' || *p == '\t')) p++;
+
+        const char *fs_start = p;
+        while (p < line_end && *p != ' ' && *p != '\t') p++;
+        size_t fs_len = (size_t)(p - fs_start);
+
+        while (p < line_end && (*p == ' ' || *p == '\t')) p++;
+
+        const char *opts_start = p;
+        while (p < line_end && *p != ' ' && *p != '\t') p++;
+        size_t opts_len = (size_t)(p - opts_start);
+
+        if (fs_len == fstype_len && memcmp(fs_start, fstype, fs_len) == 0 &&
+            opts_len > 0 && opts_len < opts_size) {
+            memcpy(opts_out, opts_start, opts_len);
+            opts_out[opts_len] = '\0';
+            return true;
+        }
+
+        cursor = line_end;
+        while (*cursor == '\n' || *cursor == '\r') cursor++;
+    }
+
+    return false;
+}
+
 bool bythos_count_child_dirs(const char *path, size_t *count) {
     if (path == NULL) {
         return false;
@@ -194,7 +287,7 @@ bool bythos_count_child_dirs(const char *path, size_t *count) {
 
     size_t used = 0;
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = bythos_readdir_safe(dir, NULL)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
@@ -262,6 +355,14 @@ bool bythos_read_key_value(const char *path, const char *key, char *buffer, size
 }
 
 bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t size, int *exit_status) {
+    return bythos_capture_argv_status_ex(argv, buffer, size, exit_status, NULL);
+}
+
+bool bythos_capture_argv_status_ex(const char *const argv[], char *buffer, size_t size,
+                                   int *exit_status, bool *truncated) {
+    if (truncated != NULL) {
+        *truncated = false;
+    }
     if (argv == NULL || argv[0] == NULL || buffer == NULL || size == 0) {
         return false;
     }
@@ -291,6 +392,7 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
         }
         close(pipefd[1]);
 
+        setenv("PATH", trusted_path(), 1);
         setenv("LC_ALL", "C", 1);
         execvp(argv[0], (char *const *)argv);
         _exit(errno == ENOENT ? 127 : 126);
@@ -301,6 +403,7 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
     struct sigaction sa = {0};
     struct sigaction old_sa;
     sa.sa_handler = bythos_on_alarm;
+    sigemptyset(&sa.sa_mask);
     sigaction(SIGALRM, &sa, &old_sa);
     bythos_alarm_fired = 0;
     alarm(BYTHOS_CMD_TIMEOUT_SEC);
@@ -315,10 +418,15 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
             size_t remaining = size - used - 1;
             if (to_copy > remaining) {
                 to_copy = remaining;
+                if (truncated != NULL) {
+                    *truncated = true;
+                }
             }
             memcpy(buffer + used, chunk, to_copy);
             used += to_copy;
             buffer[used] = '\0';
+        } else if (truncated != NULL) {
+            *truncated = true;
         }
     }
 
@@ -329,6 +437,14 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
     close(pipefd[0]);
 
     if (timed_out) {
+        int status = 0;
+        pid_t reaped = waitpid(pid, &status, WNOHANG);
+        if (reaped == pid && WIFEXITED(status)) {
+            if (exit_status != NULL) {
+                *exit_status = WEXITSTATUS(status);
+            }
+            return true;
+        }
         kill(pid, SIGKILL);
         waitpid(pid, NULL, 0);
         return false;
@@ -350,45 +466,12 @@ bool bythos_capture_argv_status(const char *const argv[], char *buffer, size_t s
 }
 
 int bythos_run_argv_quiet(const char *const argv[]) {
-    if (argv == NULL || argv[0] == NULL) {
+    char throwaway[256];
+    int exit_status = -1;
+    if (!bythos_capture_argv_status(argv, throwaway, sizeof(throwaway), &exit_status)) {
         return -1;
     }
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        return -1;
-    }
-
-    if (pid == 0) {
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull < 0) {
-            _exit(127);
-        }
-
-        if (dup2(devnull, STDOUT_FILENO) < 0) {
-            close(devnull);
-            _exit(127);
-        }
-        if (dup2(devnull, STDERR_FILENO) < 0) {
-            close(devnull);
-            _exit(127);
-        }
-
-        close(devnull);
-        setenv("LC_ALL", "C", 1);
-        execvp(argv[0], (char *const *)argv);
-        _exit(errno == ENOENT ? 127 : 126);
-    }
-
-    int status = 0;
-    if (waitpid(pid, &status, 0) < 0) {
-        return -1;
-    }
-    if (!WIFEXITED(status)) {
-        return -1;
-    }
-
-    return WEXITSTATUS(status);
+    return exit_status;
 }
 
 bythos_service_state_t bythos_probe_systemd_service(const char *unit) {

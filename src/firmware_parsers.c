@@ -81,6 +81,10 @@ size_t bythos_count_nonempty_lines(const char *text) {
     return count;
 }
 
+#define BYTHOS_JOIN_TRACK_MAX 16
+#define BYTHOS_JOIN_TRACK_NAME 64
+#define BYTHOS_JOIN_HASH_CHARS 8
+
 size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
                                        size_t max_names, size_t max_name_chars) {
     if (text == NULL || buffer == NULL || size == 0 || max_names == 0 || max_name_chars == 0) {
@@ -88,11 +92,17 @@ size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
     }
     buffer[0] = '\0';
 
+    if (max_names > BYTHOS_JOIN_TRACK_MAX) {
+        max_names = BYTHOS_JOIN_TRACK_MAX;
+    }
+
     const size_t tail_reserve = 32;
     if (size <= tail_reserve) {
         return 0;
     }
     const size_t emit_limit = size - tail_reserve;
+
+    char emitted_names[BYTHOS_JOIN_TRACK_MAX][BYTHOS_JOIN_TRACK_NAME + 1];
 
     size_t emitted = 0;
     size_t total_seen = 0;
@@ -106,12 +116,14 @@ size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
         const char *p = cursor;
         while (p < line_end && (*p == ' ' || *p == '\t')) p++;
 
+        const char *hash_start = p;
         const char *space = NULL;
         for (const char *q = p; q < line_end; q++) {
             if (*q == ' ' || *q == '\t') { space = q; break; }
         }
 
         if (p < line_end && space != NULL) {
+            size_t hash_len = (size_t)(space - hash_start);
             const char *name = space;
             while (name < line_end && (*name == ' ' || *name == '\t')) name++;
             if (name < line_end) {
@@ -125,15 +137,45 @@ size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
                     total_seen++;
                     if (emitted < max_names) {
                         size_t copy = name_len < max_name_chars ? name_len : max_name_chars;
+                        size_t track_copy = copy < BYTHOS_JOIN_TRACK_NAME ? copy : BYTHOS_JOIN_TRACK_NAME;
+
+                        bool collision = false;
+                        for (size_t e = 0; e < emitted; e++) {
+                            if (strncmp(emitted_names[e], name, track_copy) == 0 &&
+                                emitted_names[e][track_copy] == '\0') {
+                                collision = true;
+                                break;
+                            }
+                        }
+
+                        char suffix[BYTHOS_JOIN_HASH_CHARS + 4] = {0};
+                        size_t suffix_len = 0;
+                        if (collision && hash_len > 0) {
+                            size_t hash_copy = hash_len < BYTHOS_JOIN_HASH_CHARS
+                                ? hash_len : BYTHOS_JOIN_HASH_CHARS;
+                            int n = snprintf(suffix, sizeof(suffix), " [%.*s]",
+                                             (int)hash_copy, hash_start);
+                            if (n > 0 && (size_t)n < sizeof(suffix)) {
+                                suffix_len = (size_t)n;
+                            }
+                        }
+
                         size_t sep_len = emitted > 0 ? 2 : 0;
-                        if (buf_used + sep_len + copy + 1 < emit_limit) {
+                        if (buf_used + sep_len + copy + suffix_len + 1 < emit_limit) {
                             if (sep_len > 0) {
                                 buffer[buf_used++] = ',';
                                 buffer[buf_used++] = ' ';
                             }
                             memcpy(buffer + buf_used, name, copy);
                             buf_used += copy;
+                            if (suffix_len > 0) {
+                                memcpy(buffer + buf_used, suffix, suffix_len);
+                                buf_used += suffix_len;
+                            }
                             buffer[buf_used] = '\0';
+
+                            memcpy(emitted_names[emitted], name, track_copy);
+                            emitted_names[emitted][track_copy] = '\0';
                             emitted++;
                         }
                     }
@@ -145,9 +187,15 @@ size_t bythos_join_short_list_names(const char *text, char *buffer, size_t size,
         while (*cursor == '\r' || *cursor == '\n') cursor++;
     }
 
-    if (total_seen > emitted && emitted > 0) {
-        char tail[32];
-        int n = snprintf(tail, sizeof(tail), " (and %zu more)", total_seen - emitted);
+    if (total_seen > emitted) {
+        char tail[48];
+        int n;
+        if (emitted > 0) {
+            n = snprintf(tail, sizeof(tail), " (and %zu more)", total_seen - emitted);
+        } else {
+            n = snprintf(tail, sizeof(tail), "%zu %s, none fit",
+                         total_seen, total_seen == 1 ? "item" : "items");
+        }
         if (n > 0 && (size_t)n < sizeof(tail) && buf_used + (size_t)n + 1 < size) {
             memcpy(buffer + buf_used, tail, (size_t)n);
             buf_used += (size_t)n;
@@ -536,6 +584,8 @@ size_t bythos_parse_sbat_csv(const char *text, size_t text_len,
         char gen_str[20];
         memcpy(gen_str, text + gen_start, gen_len);
         gen_str[gen_len] = '\0';
+
+        if (gen_str[0] == '-' || gen_str[0] == '+') continue;
 
         char *endptr = NULL;
         unsigned long gen = strtoul(gen_str, &endptr, 10);

@@ -1,5 +1,6 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -D_POSIX_C_SOURCE=200809L -Iinclude
+TEST_CFLAGS = $(CFLAGS) -DBYTHOS_ALLOW_PATH_OVERRIDE
 LDFLAGS ?=
 
 prefix ?= /usr/local
@@ -97,28 +98,28 @@ uninstall:
 	rm -f "$(DESTDIR)$(bindir)/$(BIN)" "$(DESTDIR)$(mandir)/bythos.1"
 
 $(FIRMWARE_TEST_BIN): tests/firmware_parsers.c src/firmware_parsers.c include/firmware_parsers.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/firmware_parsers.c src/firmware_parsers.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/firmware_parsers.c src/firmware_parsers.c -o $@ $(LDFLAGS)
 
 $(FIRMWARE_OWNERSHIP_TEST_BIN): tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c include/firmware_ownership.h include/runtime.h include/firmware_parsers.h tests/assert_helpers.h tests/test_harness.h
-	$(CC) $(CFLAGS) tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/firmware_ownership.c src/firmware_ownership.c src/runtime.c src/firmware_parsers.c -o $@ $(LDFLAGS)
 
 $(SILICON_TEST_BIN): tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c include/silicon_parsers.h include/runtime.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/silicon_parsers.c src/silicon_parsers.c src/runtime.c -o $@ $(LDFLAGS)
 
 $(STORAGE_TEST_BIN): tests/storage_parsers.c src/storage_parsers.c include/storage_parsers.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/storage_parsers.c src/storage_parsers.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/storage_parsers.c src/storage_parsers.c -o $@ $(LDFLAGS)
 
 $(RUNTIME_TEST_BIN): tests/runtime_capture.c src/runtime.c include/runtime.h tests/assert_helpers.h tests/test_harness.h
-	$(CC) $(CFLAGS) tests/runtime_capture.c src/runtime.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/runtime_capture.c src/runtime.c -o $@ $(LDFLAGS)
 
 $(EFI_BOOT_TEST_BIN): tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c include/efi_boot_parsers.h include/runtime.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/efi_boot_parsers.c src/efi_boot_parsers.c src/runtime.c -o $@ $(LDFLAGS)
 
 $(ESP_TEST_BIN): tests/esp_posture.c src/esp_parsers.c include/esp_parsers.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/esp_posture.c src/esp_parsers.c -o $@ $(LDFLAGS)
 
 $(SKIP_REASON_TEST_BIN): tests/skip_reason.c src/output.c include/output.h include/types.h tests/assert_helpers.h
-	$(CC) $(CFLAGS) tests/skip_reason.c src/output.c -o $@ $(LDFLAGS)
+	$(CC) $(TEST_CFLAGS) tests/skip_reason.c src/output.c -o $@ $(LDFLAGS)
 
 clean:
 	rm -f src/*.o *.o $(BIN) $(TEST_BINS)

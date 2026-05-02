@@ -32,21 +32,21 @@ static void assert_service_probe_with_script(
     snprintf(script_path, sizeof(script_path), "%s/systemctl", dir);
     write_executable(script_path, script);
 
-    const char *path = getenv("PATH");
+    const char *path = getenv("BYTHOS_PATH");
     char *saved_path = path == NULL ? NULL : strdup(path);
     if (path != NULL && saved_path == NULL) {
-        fprintf(stderr, "runtime capture failure: could not save PATH\n");
+        fprintf(stderr, "runtime capture failure: could not save BYTHOS_PATH\n");
         exit(1);
     }
 
-    if (setenv("PATH", dir, 1) != 0) {
-        fprintf(stderr, "runtime capture failure: could not override PATH\n");
+    if (setenv("BYTHOS_PATH", dir, 1) != 0) {
+        fprintf(stderr, "runtime capture failure: could not override BYTHOS_PATH\n");
         free(saved_path);
         exit(1);
     }
 
     bythos_service_state_t got = bythos_probe_systemd_service("mock.service");
-    restore_path(saved_path);
+    restore_env("BYTHOS_PATH", saved_path);
 
     unlink(script_path);
     rmdir(dir);
@@ -125,19 +125,19 @@ int main(void) {
         char template[] = "./tmp-bythos-runtime-empty-XXXXXX";
         char *dir = mkdtemp(template);
         if (dir == NULL) {
-            fprintf(stderr, "runtime capture failure: could not create temp dir for empty PATH\n");
+            fprintf(stderr, "runtime capture failure: could not create temp dir for empty BYTHOS_PATH\n");
             return 1;
         }
 
-        const char *path = getenv("PATH");
+        const char *path = getenv("BYTHOS_PATH");
         char *saved_path = path == NULL ? NULL : strdup(path);
         if (path != NULL && saved_path == NULL) {
-            fprintf(stderr, "runtime capture failure: could not save PATH for empty PATH test\n");
+            fprintf(stderr, "runtime capture failure: could not save BYTHOS_PATH for empty test\n");
             return 1;
         }
 
-        if (setenv("PATH", dir, 1) != 0) {
-            fprintf(stderr, "runtime capture failure: could not set empty PATH dir\n");
+        if (setenv("BYTHOS_PATH", dir, 1) != 0) {
+            fprintf(stderr, "runtime capture failure: could not set empty BYTHOS_PATH dir\n");
             free(saved_path);
             return 1;
         }
@@ -148,7 +148,7 @@ int main(void) {
             bythos_probe_systemd_service("mock.service")
         );
 
-        restore_path(saved_path);
+        restore_env("BYTHOS_PATH", saved_path);
         rmdir(dir);
     }
 

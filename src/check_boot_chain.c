@@ -62,7 +62,7 @@ static bool find_efi_binary(const char *const *candidates, size_t candidate_coun
     bool found = false;
     struct dirent *vendor;
 
-    while (!found && (vendor = readdir(efi_dir)) != NULL) {
+    while (!found && (vendor = bythos_readdir_safe(efi_dir, NULL)) != NULL) {
         if (vendor->d_name[0] == '.') {
             continue;
         }
@@ -79,7 +79,7 @@ static bool find_efi_binary(const char *const *candidates, size_t candidate_coun
         }
 
         struct dirent *entry;
-        while ((entry = readdir(vendor_dir)) != NULL) {
+        while ((entry = bythos_readdir_safe(vendor_dir, NULL)) != NULL) {
             char lower[256];
             bythos_to_lower_ascii(entry->d_name, lower, sizeof(lower));
 
@@ -172,7 +172,7 @@ static void scan_initramfs_dir(const char *dir_path, int max_depth,
     if (d == NULL) return;
 
     struct dirent *entry;
-    while ((entry = readdir(d)) != NULL) {
+    while ((entry = bythos_readdir_safe(d, NULL)) != NULL) {
         const char *name = entry->d_name;
         if (name[0] == '.') continue;
 

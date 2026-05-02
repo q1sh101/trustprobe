@@ -7,19 +7,19 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static inline void restore_path(char *saved_path) {
-    if (saved_path != NULL) {
-        if (setenv("PATH", saved_path, 1) != 0) {
-            fprintf(stderr, "test harness failure: could not restore PATH\n");
-            free(saved_path);
+static inline void restore_env(const char *name, char *saved_value) {
+    if (saved_value != NULL) {
+        if (setenv(name, saved_value, 1) != 0) {
+            fprintf(stderr, "test harness failure: could not restore %s\n", name);
+            free(saved_value);
             exit(1);
         }
-        free(saved_path);
+        free(saved_value);
         return;
     }
 
-    if (unsetenv("PATH") != 0) {
-        fprintf(stderr, "test harness failure: could not unset PATH\n");
+    if (unsetenv(name) != 0) {
+        fprintf(stderr, "test harness failure: could not unset %s\n", name);
         exit(1);
     }
 }

@@ -9,16 +9,19 @@
 #define SUBGROUP_TAIL(sg) \
     ((sg)->results + (sg)->result_count)
 
+#define BYTHOS_SUBGROUP_MAX_FNS 6
+
 typedef size_t (*subgroup_check_fn)(check_result_t *, size_t);
 
 typedef struct {
     const char *name;
-    subgroup_check_fn fns[5];
+    subgroup_check_fn fns[BYTHOS_SUBGROUP_MAX_FNS];
 } subgroup_def_t;
 
 static void subgroup_init(check_subgroup_t *sg, const char *name) {
     sg->name = name;
     sg->result_count = 0;
+    sg->truncated = false;
     sg->summary = (posture_summary_t){0};
 }
 
@@ -36,7 +39,11 @@ static size_t run_subgroups(const subgroup_def_t *defs,
     for (size_t i = 0; defs[i].name != NULL && used < max_subgroups; i++) {
         check_subgroup_t *sg = &subgroups[used++];
         subgroup_init(sg, defs[i].name);
-        for (size_t j = 0; defs[i].fns[j] != NULL; j++) {
+        for (size_t j = 0; j < BYTHOS_SUBGROUP_MAX_FNS && defs[i].fns[j] != NULL; j++) {
+            if (sg->result_count >= BYTHOS_MAX_SUBGROUP_RESULTS) {
+                sg->truncated = true;
+                break;
+            }
             sg->result_count += defs[i].fns[j](
                 SUBGROUP_TAIL(sg), SUBGROUP_REMAINING(sg));
         }

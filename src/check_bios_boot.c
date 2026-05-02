@@ -37,17 +37,33 @@ static bool read_boot_entry(uint16_t number, bythos_efi_boot_entry_t *entry) {
 static size_t check_efivars_boot(check_result_t *results, size_t max_results) {
     size_t used = 0;
 
+    if (!bythos_file_exists("/sys/firmware/efi/efivars")) {
+        EMIT_SKIP_FEATURE("EFI USB boot",      "EFI runtime");
+        EMIT_SKIP_FEATURE("EFI network boot",  "EFI runtime");
+        EMIT_SKIP_FEATURE("EFI CD/DVD boot",   "EFI runtime");
+        EMIT_SKIP_FEATURE("EFI one-shot boot", "EFI runtime");
+        return used;
+    }
+
     unsigned char order_buf[256];
     size_t order_len = 0;
 
     if (!bythos_read_file_binary(EFI_BOOT_ORDER_PATH, order_buf,
                                      sizeof(order_buf), &order_len)) {
-        return 0;
+        EMIT_SKIP_FEATURE("EFI USB boot",      "BootOrder variable");
+        EMIT_SKIP_FEATURE("EFI network boot",  "BootOrder variable");
+        EMIT_SKIP_FEATURE("EFI CD/DVD boot",   "BootOrder variable");
+        EMIT_SKIP_FEATURE("EFI one-shot boot", "BootOrder variable");
+        return used;
     }
 
     bythos_efi_boot_order_t order = {0};
     if (!bythos_parse_efi_boot_order(order_buf, order_len, &order)) {
-        return 0;
+        EMIT_SKIP("EFI USB boot",      SKIP_OUTPUT_UNPARSEABLE, "BootOrder variable malformed");
+        EMIT_SKIP("EFI network boot",  SKIP_OUTPUT_UNPARSEABLE, "BootOrder variable malformed");
+        EMIT_SKIP("EFI CD/DVD boot",   SKIP_OUTPUT_UNPARSEABLE, "BootOrder variable malformed");
+        EMIT_SKIP("EFI one-shot boot", SKIP_OUTPUT_UNPARSEABLE, "BootOrder variable malformed");
+        return used;
     }
 
     /* Only active risky entries are a real posture signal. */
@@ -154,7 +170,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
     char value[64] = {0};
     struct dirent *vendor;
 
-    while ((vendor = readdir(vendors)) != NULL) {
+    while ((vendor = bythos_readdir_safe(vendors, NULL)) != NULL) {
         if (vendor->d_name[0] == '.') {
             continue;
         }
@@ -170,7 +186,7 @@ static size_t check_firmware_attrs_boot(check_result_t *results, size_t max_resu
         }
 
         struct dirent *attr;
-        while ((attr = readdir(attrs)) != NULL) {
+        while ((attr = bythos_readdir_safe(attrs, NULL)) != NULL) {
             if (attr->d_name[0] == '.') {
                 continue;
             }
@@ -280,6 +296,10 @@ static size_t check_firmware_password(check_result_t *results, size_t max_result
         pos += strlen(slots[i].field);
         while (*pos == ' ' || *pos == '\t') {
             pos++;
+        }
+        if ((size_t)((buf + sizeof(buf)) - pos) < 9) {
+            EMIT_SKIP_PARSE(slots[i].name, "dmidecode");
+            continue;
         }
         char term = pos[7];
         if (strncmp(pos, "Enabled", 7) == 0 &&

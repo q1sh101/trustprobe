@@ -202,9 +202,11 @@ bool bythos_parse_efi_boot_entry(const unsigned char *data, size_t len,
     size_t desc_bytes = remaining - 6;
 
     size_t desc_end = 0;
+    bool desc_terminated = false;
     for (size_t i = 0; i + 1 < desc_bytes; i += 2) {
         if (desc_start[i] == 0 && desc_start[i + 1] == 0) {
             desc_end = i;
+            desc_terminated = true;
             break;
         }
         desc_end = i + 2;
@@ -213,13 +215,15 @@ bool bythos_parse_efi_boot_entry(const unsigned char *data, size_t len,
     utf16le_to_ascii(desc_start, desc_end, entry->description,
                      sizeof(entry->description));
 
-    size_t dp_offset = 6 + desc_end + 2;
-    if (dp_offset < remaining && fp_list_len > 0) {
-        size_t dp_avail = remaining - dp_offset;
-        if (dp_avail > fp_list_len) {
-            dp_avail = fp_list_len;
+    if (desc_terminated && fp_list_len > 0) {
+        size_t dp_offset = 6 + desc_end + 2;
+        if (dp_offset < remaining) {
+            size_t dp_avail = remaining - dp_offset;
+            if (dp_avail > fp_list_len) {
+                dp_avail = fp_list_len;
+            }
+            entry->type = classify_device_path(p + dp_offset, dp_avail);
         }
-        entry->type = classify_device_path(p + dp_offset, dp_avail);
     }
 
     if (entry->type == BYTHOS_EFI_BOOT_TYPE_UNKNOWN) {

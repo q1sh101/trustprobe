@@ -162,33 +162,47 @@ check_state_t bythos_summary_state(const posture_summary_t *summary) {
     return CHECK_SKIP;
 }
 
+static int utf8_seq_len(unsigned char c) {
+    if (c < 0x80) return 1;
+    if (c < 0xC2) return 0;
+    if (c < 0xE0) return 2;
+    if (c < 0xF0) return 3;
+    if (c < 0xF5) return 4;
+    return 0;
+}
+
 static void print_json_string(const char *text) {
     putchar('"');
-    for (const unsigned char *p = (const unsigned char *)text; *p != '\0'; p++) {
-        switch (*p) {
-        case '\\':
-            fputs("\\\\", stdout);
-            break;
-        case '"':
-            fputs("\\\"", stdout);
-            break;
-        case '\n':
-            fputs("\\n", stdout);
-            break;
-        case '\r':
-            fputs("\\r", stdout);
-            break;
-        case '\t':
-            fputs("\\t", stdout);
-            break;
-        default:
-            if (*p < 0x20) {
-                printf("\\u%04x", *p);
-            } else {
-                putchar(*p);
-            }
-            break;
+    const unsigned char *p = (const unsigned char *)text;
+    while (*p != '\0') {
+        unsigned char c = *p;
+        if (c == '\\') { fputs("\\\\", stdout); p++; continue; }
+        if (c == '"')  { fputs("\\\"", stdout); p++; continue; }
+        if (c == '\n') { fputs("\\n",  stdout); p++; continue; }
+        if (c == '\r') { fputs("\\r",  stdout); p++; continue; }
+        if (c == '\t') { fputs("\\t",  stdout); p++; continue; }
+        if (c < 0x20)  { printf("\\u%04x", c);  p++; continue; }
+        if (c < 0x80)  { putchar(c);            p++; continue; }
+
+        int seq = utf8_seq_len(c);
+        if (seq < 2) {
+            fputs("\xEF\xBF\xBD", stdout);
+            p++;
+            continue;
         }
+        bool valid = true;
+        for (int i = 1; i < seq; i++) {
+            if ((p[i] & 0xC0) != 0x80) { valid = false; break; }
+        }
+        if (!valid) {
+            fputs("\xEF\xBF\xBD", stdout);
+            p++;
+            continue;
+        }
+        for (int i = 0; i < seq; i++) {
+            putchar(p[i]);
+        }
+        p += seq;
     }
     putchar('"');
 }
@@ -266,7 +280,7 @@ static void bythos_print_json(
                        result->requires_root ? "true" : "false",
                        result->actionable ? "true" : "false");
             }
-            printf("]}");
+            printf("],\"truncated\":%s}", sg->truncated ? "true" : "false");
         }
         printf("]}");
     }
@@ -289,6 +303,10 @@ static void print_groups_hierarchy(
             printf("  %s%s:%s\n", c_accent(), sg->name, c_reset());
             for (size_t i = 0; i < sg->result_count; i++) {
                 bythos_print_result_in_subgroup(&sg->results[i], sg->name);
+            }
+            if (sg->truncated) {
+                printf("    %s(some results truncated; subgroup at capacity)%s\n",
+                    c_dim(), c_reset());
             }
             putchar('\n');
         }

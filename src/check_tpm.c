@@ -17,7 +17,8 @@ static bool parse_max_auth_fail(const char *text, unsigned long *out) {
     if (key == NULL) return false;
 
     const char *cursor = key + strlen("TPM2_PT_MAX_AUTH_FAIL");
-    const char *end = strstr(cursor + 1, "TPM2_PT_");
+    const char *search_from = (*cursor != '\0') ? cursor + 1 : cursor;
+    const char *end = strstr(search_from, "TPM2_PT_");
     if (end == NULL) end = cursor + strlen(cursor);
 
     const char *value_kw = strstr(cursor, "value:");

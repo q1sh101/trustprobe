@@ -16,7 +16,7 @@ static bool read_tb_domain_attr(const char *attr, char *buffer, size_t size) {
     if (dir == NULL) return false;
 
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = bythos_readdir_safe(dir, NULL)) != NULL) {
         if (strncmp(entry->d_name, "domain", 6) != 0) continue;
 
         char path[PATH_MAX];
@@ -39,7 +39,7 @@ static bool tb_controller_present(void) {
 
     bool found = false;
     struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
+    while ((entry = bythos_readdir_safe(dir, NULL)) != NULL) {
         if (strncmp(entry->d_name, "domain", 6) == 0) {
             found = true;
             break;

@@ -1,6 +1,5 @@
 #include <stddef.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "checks.h"
 #include "checks_internal.h"
@@ -12,14 +11,12 @@ size_t bythos_check_microcode(check_result_t *results, size_t max_results) {
     const char *cpuinfo_path = "/proc/cpuinfo";
 
     {
-        static char cpuinfo[65536];
+        char microcode_line[256] = {0};
         char revision[128] = {0};
 
-        memset(cpuinfo, 0, sizeof(cpuinfo));
-
-        if (!bythos_read_file_text(cpuinfo_path, cpuinfo, sizeof(cpuinfo))) {
-            EMIT("CPU microcode", CHECK_WARN, "unable to read /proc/cpuinfo");
-        } else if (bythos_extract_microcode_revision(cpuinfo, revision, sizeof(revision))) {
+        if (!bythos_first_line_with_prefix(cpuinfo_path, "microcode", microcode_line, sizeof(microcode_line))) {
+            EMIT("CPU microcode", CHECK_WARN, "revision not visible");
+        } else if (bythos_extract_microcode_revision(microcode_line, revision, sizeof(revision))) {
             char detail[160];
             snprintf(detail, sizeof(detail), "loaded revision %s", revision);
             EMIT("CPU microcode", CHECK_OK, detail);

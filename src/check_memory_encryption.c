@@ -1,5 +1,4 @@
 #include <stddef.h>
-#include <string.h>
 
 #include "checks.h"
 #include "checks_internal.h"
@@ -23,16 +22,14 @@ size_t bythos_check_memory_encryption(check_result_t *results, size_t max_result
         return used;
     }
 
-    static char cpuinfo[65536];
-    memset(cpuinfo, 0, sizeof(cpuinfo));
-
-    if (!bythos_read_file_text("/proc/cpuinfo", cpuinfo, sizeof(cpuinfo))) {
+    char flags_line[4096] = {0};
+    if (!bythos_first_line_with_prefix("/proc/cpuinfo", "flags", flags_line, sizeof(flags_line))) {
         EMIT_SKIP_EXEC("memory encryption", "cpuinfo");
         return used;
     }
 
     bythos_mem_enc_flags_t flags;
-    bythos_parse_memory_encryption_flags(cpuinfo, &flags);
+    bythos_parse_memory_encryption_flags(flags_line, &flags);
 
     if (vendor == BYTHOS_CPU_VENDOR_AMD) {
         if (!flags.amd_sme) {
