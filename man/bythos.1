@@ -47,10 +47,13 @@ versus shim, pending UpdateCapsule files
 .IP \(bu 2
 .B tpm
 \- TPM 2.0 presence, dictionary-attack lockout policy, PCR 7 and PCR 0
-measurement state, TPM event log CRTM signal
+measurement state, TPM event log presence (binary) and CRTM signal
+(ASCII parser)
 .IP \(bu 2
 .B luks
-\- LUKS volume visibility, LUKS TPM2 binding and PCR mask strength
+\- LUKS volume visibility, LUKS header version (LUKS1 vs LUKS2),
+dm-integrity configuration, TPM2 binding presence, and PCR coverage
+split between Secure Boot baseline (PCR 7) and boot chain (PCR 4 / 9)
 .IP \(bu 2
 .B platform firmware
 \- Intel BIOS write protection (BIOSWE / BLE / SMM_BWP), Intel ME
@@ -161,6 +164,8 @@ Read-only paths grouped by purpose. None are written.
 .I /sys/class/tpm/tpm0
 .TP
 .I /sys/class/tpm/tpm0/tpm_version_major
+.TP
+.I /sys/kernel/security/tpm0/binary_bios_measurements
 .TP
 .I /sys/kernel/security/tpm0/ascii_bios_measurements
 .RE

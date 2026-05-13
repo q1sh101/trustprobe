@@ -141,6 +141,8 @@ _test_contains "secure boot state"            "$_json" '"name":"secure boot stat
 _test_contains "bootloader version"           "$_json" '"name":"bootloader version"'
 _test_contains "TPM presence"                 "$_json" '"name":"TPM presence"'
 _test_contains "DA lockout"                   "$_json" '"name":"DA lockout"'
+_test_contains "TPM event log"                "$_json" '"name":"TPM event log"'
+_test_contains "TPM event log ASCII"          "$_json" '"name":"TPM event log ASCII"'
 _test_contains "LUKS block devices"           "$_json" '"name":"LUKS block devices"'
 _test_contains "LUKS version"                 "$_json" '"name":"LUKS version"'
 _test_contains "LUKS dm-integrity"            "$_json" '"name":"LUKS dm-integrity"'

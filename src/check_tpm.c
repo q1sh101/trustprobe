@@ -163,14 +163,21 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
     }
 
     {
-        const char *evlog = "/sys/kernel/security/tpm0/ascii_bios_measurements";
+        const char *evlog_bin = "/sys/kernel/security/tpm0/binary_bios_measurements";
+        const char *evlog_ascii = "/sys/kernel/security/tpm0/ascii_bios_measurements";
 
         if (!tpm_present) {
             EMIT_SKIP_HW("TPM event log", "TPM");
+            EMIT_SKIP_HW("TPM event log ASCII", "TPM");
+        } else if (!bythos_file_exists(evlog_bin)) {
+            EMIT_SKIP("TPM event log", SKIP_FEATURE_ABSENT, "not exposed by firmware");
+            EMIT_SKIP("TPM event log ASCII", SKIP_FEATURE_ABSENT, "binary log absent");
         } else {
-            FILE *f = fopen(evlog, "r");
+            EMIT("TPM event log", CHECK_OK, "binary log present");
+
+            FILE *f = fopen(evlog_ascii, "r");
             if (f == NULL) {
-                EMIT_SKIP_FEATURE("TPM event log", "TPM event log");
+                EMIT_SKIP("TPM event log ASCII", SKIP_FEATURE_ABSENT, "kernel parser unavailable");
             } else {
                 char line[512];
                 bool found = false;
@@ -182,9 +189,9 @@ size_t bythos_check_tpm(check_result_t *results, size_t max_results) {
                 }
                 fclose(f);
                 if (found) {
-                    EMIT("TPM event log", CHECK_OK, "CRTM version event present");
+                    EMIT("TPM event log ASCII", CHECK_OK, "CRTM version event present");
                 } else {
-                    EMIT("TPM event log", CHECK_WARN, "EV_S_CRTM_VERSION absent");
+                    EMIT("TPM event log ASCII", CHECK_WARN, "EV_S_CRTM_VERSION absent");
                 }
             }
         }
