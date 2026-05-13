@@ -93,6 +93,27 @@ int main(void) {
     assert_false("pcr_null", bythos_parse_luks_pcr_mask(NULL, &mask));
     assert_false("pcr_null_out", bythos_parse_luks_pcr_mask("systemd-tpm2\n", NULL));
 
+    assert_eq_int("version_luks2",
+        bythos_parse_luks_version("LUKS header information\nVersion:        2\n"), 2);
+    assert_eq_int("version_luks1",
+        bythos_parse_luks_version("LUKS header information\nVersion:\t1\n"), 1);
+    assert_eq_int("version_missing",
+        bythos_parse_luks_version("LUKS header information\nUUID: abc\n"), 0);
+    assert_eq_int("version_unknown_digit",
+        bythos_parse_luks_version("Version: 9\n"), 0);
+    assert_eq_int("version_null", bythos_parse_luks_version(NULL), 0);
+
+    assert_true("integrity_present",
+        bythos_parse_luks_integrity(
+            "Data segments:\n  0: crypt\n        cipher: aes-xts-plain64\n        integrity: aead\n"));
+    assert_false("integrity_absent",
+        bythos_parse_luks_integrity(
+            "Data segments:\n  0: crypt\n        cipher: aes-xts-plain64\n"));
+    assert_false("integrity_key_does_not_match",
+        bythos_parse_luks_integrity(
+            "Keyslots:\n  0: luks2\n        integrity_key: 0 bits\n"));
+    assert_false("integrity_null", bythos_parse_luks_integrity(NULL));
+
     printf("storage parsers ok\n");
     return 0;
 }

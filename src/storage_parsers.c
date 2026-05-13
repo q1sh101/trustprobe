@@ -5,6 +5,8 @@
 
 #include "storage_parsers.h"
 
+#define BYTHOS_LUKS_PCR_WINDOW_BYTES 512
+
 void bythos_parse_lsblk_posture(const char *text, bythos_lsblk_posture_t *posture) {
     if (posture == NULL) {
         return;
@@ -61,6 +63,22 @@ void bythos_parse_lsblk_posture(const char *text, bythos_lsblk_posture_t *postur
     }
 }
 
+int bythos_parse_luks_version(const char *text) {
+    if (text == NULL) return 0;
+    const char *key = strstr(text, "Version:");
+    if (key == NULL) return 0;
+    const char *p = key + strlen("Version:");
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == '1') return 1;
+    if (*p == '2') return 2;
+    return 0;
+}
+
+bool bythos_parse_luks_integrity(const char *text) {
+    if (text == NULL) return false;
+    return strstr(text, "integrity:") != NULL;
+}
+
 bool bythos_parse_luks_pcr_mask(const char *text, uint32_t *mask_out) {
     if (text == NULL || mask_out == NULL) return false;
     *mask_out = 0;
@@ -70,7 +88,7 @@ bool bythos_parse_luks_pcr_mask(const char *text, uint32_t *mask_out) {
 
     /* bound search to this token section */
     size_t window = strlen(pos);
-    if (window > 512) window = 512;
+    if (window > BYTHOS_LUKS_PCR_WINDOW_BYTES) window = BYTHOS_LUKS_PCR_WINDOW_BYTES;
     const char *end = pos + window;
 
     const char *line = pos;

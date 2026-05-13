@@ -84,22 +84,38 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
         };
         char lsblk_buf[4096] = {0};
         int lsblk_status = -1;
+        bool tpm_present = bythos_file_exists("/sys/class/tpm/tpm0");
 
-        if (!bythos_file_exists("/sys/class/tpm/tpm0")) {
-            EMIT_SKIP_HW("LUKS TPM binding", "TPM");
-        } else if (!bythos_command_exists("lsblk")) {
+        if (!bythos_command_exists("lsblk")) {
+            EMIT_SKIP_TOOL_INSTALL("LUKS version", "util-linux");
+            EMIT_SKIP_TOOL_INSTALL("LUKS dm-integrity", "util-linux");
             EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "util-linux");
+            EMIT_SKIP_TOOL_INSTALL("LUKS Secure Boot binding", "util-linux");
+            EMIT_SKIP_TOOL_INSTALL("LUKS boot chain binding", "util-linux");
         } else if (!bythos_command_exists("cryptsetup")) {
+            EMIT_SKIP_TOOL_INSTALL("LUKS version", "cryptsetup");
+            EMIT_SKIP_TOOL_INSTALL("LUKS dm-integrity", "cryptsetup");
             EMIT_SKIP_TOOL_INSTALL("LUKS TPM binding", "cryptsetup");
+            EMIT_SKIP_TOOL_INSTALL("LUKS Secure Boot binding", "cryptsetup");
+            EMIT_SKIP_TOOL_INSTALL("LUKS boot chain binding", "cryptsetup");
         } else if (!bythos_capture_argv_status(lsblk_fstype_argv, lsblk_buf,
                                                     sizeof(lsblk_buf), &lsblk_status) ||
                    lsblk_status != 0) {
+            EMIT_SKIP_EXEC("LUKS version", "lsblk");
+            EMIT_SKIP_EXEC("LUKS dm-integrity", "lsblk");
             EMIT_SKIP_EXEC("LUKS TPM binding", "lsblk");
+            EMIT_SKIP_EXEC("LUKS Secure Boot binding", "lsblk");
+            EMIT_SKIP_EXEC("LUKS boot chain binding", "lsblk");
         } else {
             size_t luks_found = 0;
             size_t luks_no_token = 0;
             size_t luks_token_noparsed = 0;
             size_t dump_ok = 0;
+            size_t dump_failed = 0;
+            size_t luks2_count = 0;
+            size_t luks1_count = 0;
+            size_t version_unknown_count = 0;
+            size_t integrity_count = 0;
             uint32_t weakest_mask = 0xFFFFFFFFu;
             unsigned int weakest_popcount = 32u;
             bool any_token = false;
@@ -136,6 +152,16 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                                     dump_buf, sizeof(dump_buf), &dump_status) &&
                                 dump_status == 0) {
                                 dump_ok++;
+
+                                int version = bythos_parse_luks_version(dump_buf);
+                                if (version == 2) luks2_count++;
+                                else if (version == 1) luks1_count++;
+                                else version_unknown_count++;
+
+                                if (bythos_parse_luks_integrity(dump_buf)) {
+                                    integrity_count++;
+                                }
+
                                 if (strstr(dump_buf, "systemd-tpm2") != NULL) {
                                     any_token = true;
                                     uint32_t mask = 0;
@@ -153,6 +179,8 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
                                 } else {
                                     luks_no_token++;
                                 }
+                            } else {
+                                dump_failed++;
                             }
                         }
                     }
@@ -162,64 +190,150 @@ size_t bythos_check_luks(check_result_t *results, size_t max_results) {
             }
 
             if (luks_found == 0) {
+                EMIT_SKIP_SUBJECT("LUKS version", "LUKS volumes");
+                EMIT_SKIP_SUBJECT("LUKS dm-integrity", "LUKS volumes");
                 EMIT_SKIP_SUBJECT("LUKS TPM binding", "LUKS volumes");
+                EMIT_SKIP_SUBJECT("LUKS Secure Boot binding", "LUKS volumes");
+                EMIT_SKIP_SUBJECT("LUKS boot chain binding", "LUKS volumes");
             } else if (dump_ok == 0) {
+                EMIT_SKIP_EXEC_ROOT("LUKS version", "cryptsetup");
+                EMIT_SKIP_EXEC_ROOT("LUKS dm-integrity", "cryptsetup");
                 EMIT_SKIP_EXEC_ROOT("LUKS TPM binding", "cryptsetup");
-            } else if (!any_token) {
-                EMIT("LUKS TPM binding", CHECK_WARN, "LUKS device without TPM2 token");
-            } else if (luks_no_token > 0) {
-                EMIT("LUKS TPM binding", CHECK_WARN, "at least one LUKS device without TPM2 token");
-            } else if (weakest_mask == 0xFFFFFFFFu || weakest_mask == 0) {
-                /* token present but PCR field not parsed */
-                char detail[BYTHOS_DETAIL_MAX];
-                snprintf(detail, sizeof(detail),
-                    "TPM2 token on %zu %s; PCR binding unreadable",
-                    luks_found, bythos_pl(luks_found, "device", "devices"));
-                EMIT("LUKS TPM binding", CHECK_WARN, detail);
+                EMIT_SKIP_EXEC_ROOT("LUKS Secure Boot binding", "cryptsetup");
+                EMIT_SKIP_EXEC_ROOT("LUKS boot chain binding", "cryptsetup");
             } else {
-                bool has7 = (weakest_mask & PCR_BIT(7)) != 0;
-                bool has4 = (weakest_mask & PCR_BIT(4)) != 0;
-                bool has9 = (weakest_mask & PCR_BIT(9)) != 0;
-                bool has0 = (weakest_mask & PCR_BIT(0)) != 0;
-                char pcr_str[64] = {0};
-                pcr_mask_to_str(weakest_mask, pcr_str, sizeof(pcr_str));
                 char detail[BYTHOS_DETAIL_MAX];
 
-                if (!has7) {
+                if (dump_failed > 0) {
                     snprintf(detail, sizeof(detail),
-                        "PCRs: %s; PCR 7 absent, Secure Boot state unmeasured", pcr_str);
-                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
-                } else if (!has4 && !has9) {
+                        "%zu of %zu %s unreadable by cryptsetup",
+                        dump_failed, luks_found,
+                        bythos_pl(luks_found, "volume", "volumes"));
+                    EMIT_SKIP("LUKS version", SKIP_EXEC_FAILED, detail);
+                } else if (version_unknown_count > 0) {
                     snprintf(detail, sizeof(detail),
-                        "PCRs: %s only; bootloader and initramfs unprotected", pcr_str);
-                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
-                } else if (!has9) {
+                        "%zu %s with unparseable version",
+                        version_unknown_count,
+                        bythos_pl(version_unknown_count, "volume", "volumes"));
+                    EMIT_SKIP("LUKS version", SKIP_OUTPUT_UNPARSEABLE, detail);
+                } else if (luks1_count > 0) {
                     snprintf(detail, sizeof(detail),
-                        "PCRs: %s; initramfs unprotected", pcr_str);
-                    EMIT("LUKS TPM binding", CHECK_WARN, detail);
-                } else if (has0) {
-                    if (luks_token_noparsed > 0) {
+                        "%zu LUKS1 %s; legacy format, no token support",
+                        luks1_count,
+                        bythos_pl(luks1_count, "volume", "volumes"));
+                    EMIT("LUKS version", CHECK_WARN, detail);
+                } else {
+                    snprintf(detail, sizeof(detail),
+                        "all %zu %s LUKS2",
+                        luks2_count,
+                        bythos_pl(luks2_count, "volume", "volumes"));
+                    EMIT("LUKS version", CHECK_OK, detail);
+                }
+
+                if (dump_failed > 0) {
+                    snprintf(detail, sizeof(detail),
+                        "%zu of %zu %s unreadable by cryptsetup",
+                        dump_failed, luks_found,
+                        bythos_pl(luks_found, "volume", "volumes"));
+                    EMIT_SKIP("LUKS dm-integrity", SKIP_EXEC_FAILED, detail);
+                } else if (integrity_count == 0) {
+                    EMIT_SKIP_NOT_CONF("LUKS dm-integrity", "dm-integrity");
+                } else if (integrity_count == dump_ok) {
+                    snprintf(detail, sizeof(detail),
+                        "enabled on all %zu %s",
+                        integrity_count,
+                        bythos_pl(integrity_count, "volume", "volumes"));
+                    EMIT("LUKS dm-integrity", CHECK_OK, detail);
+                } else {
+                    snprintf(detail, sizeof(detail),
+                        "enabled on %zu of %zu %s",
+                        integrity_count, dump_ok,
+                        bythos_pl(dump_ok, "volume", "volumes"));
+                    EMIT("LUKS dm-integrity", CHECK_WARN, detail);
+                }
+
+                if (!tpm_present) {
+                    EMIT_SKIP_HW("LUKS TPM binding", "TPM");
+                    EMIT_SKIP_HW("LUKS Secure Boot binding", "TPM");
+                    EMIT_SKIP_HW("LUKS boot chain binding", "TPM");
+                } else {
+                    if (!any_token) {
+                        EMIT("LUKS TPM binding", CHECK_WARN, "no LUKS device has TPM2 token");
+                    } else if (dump_failed > 0) {
                         snprintf(detail, sizeof(detail),
-                            "PCRs: %s; %zu %s PCR binding unreadable",
-                            pcr_str, luks_token_noparsed,
-                            bythos_pl(luks_token_noparsed, "device", "devices"));
+                            "TPM2 token found, but %zu of %zu %s unreadable",
+                            dump_failed, luks_found,
+                            bythos_pl(luks_found, "device", "devices"));
                         EMIT("LUKS TPM binding", CHECK_WARN, detail);
+                    } else if (luks_no_token > 0) {
+                        EMIT("LUKS TPM binding", CHECK_WARN, "at least one LUKS device without TPM2 token");
                     } else {
                         snprintf(detail, sizeof(detail),
-                            "PCRs: %s; firmware and full boot chain measured", pcr_str);
+                            "TPM2 token on %zu %s",
+                            luks_found, bythos_pl(luks_found, "device", "devices"));
                         EMIT("LUKS TPM binding", CHECK_OK, detail);
                     }
-                } else {
-                    if (luks_token_noparsed > 0) {
+
+                    if (!any_token) {
+                        EMIT_SKIP("LUKS Secure Boot binding", SKIP_SUBJECT_ABSENT, "no TPM2 token to evaluate");
+                        EMIT_SKIP("LUKS boot chain binding", SKIP_SUBJECT_ABSENT, "no TPM2 token to evaluate");
+                    } else if (dump_failed > 0) {
                         snprintf(detail, sizeof(detail),
-                            "PCRs: %s; %zu %s PCR binding unreadable",
-                            pcr_str, luks_token_noparsed,
-                            bythos_pl(luks_token_noparsed, "device", "devices"));
-                        EMIT("LUKS TPM binding", CHECK_WARN, detail);
+                            "%zu of %zu %s unreadable by cryptsetup",
+                            dump_failed, luks_found,
+                            bythos_pl(luks_found, "device", "devices"));
+                        EMIT_SKIP("LUKS Secure Boot binding", SKIP_EXEC_FAILED, detail);
+                        EMIT_SKIP("LUKS boot chain binding", SKIP_EXEC_FAILED, detail);
+                    } else if (weakest_mask == 0xFFFFFFFFu || weakest_mask == 0) {
+                        EMIT_SKIP("LUKS Secure Boot binding", SKIP_OUTPUT_UNPARSEABLE, "PCR mask unreadable");
+                        EMIT_SKIP("LUKS boot chain binding", SKIP_OUTPUT_UNPARSEABLE, "PCR mask unreadable");
                     } else {
-                        snprintf(detail, sizeof(detail),
-                            "PCRs: %s; boot chain measured", pcr_str);
-                        EMIT("LUKS TPM binding", CHECK_OK, detail);
+                        bool has7 = (weakest_mask & PCR_BIT(7)) != 0;
+                        bool has4 = (weakest_mask & PCR_BIT(4)) != 0;
+                        bool has9 = (weakest_mask & PCR_BIT(9)) != 0;
+                        bool has0 = (weakest_mask & PCR_BIT(0)) != 0;
+                        char pcr_str[64] = {0};
+                        pcr_mask_to_str(weakest_mask, pcr_str, sizeof(pcr_str));
+
+                        if (!has7) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; PCR 7 absent, Secure Boot state unmeasured", pcr_str);
+                            EMIT("LUKS Secure Boot binding", CHECK_WARN, detail);
+                        } else if (luks_token_noparsed > 0) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; %zu %s PCR binding unreadable",
+                                pcr_str, luks_token_noparsed,
+                                bythos_pl(luks_token_noparsed, "device", "devices"));
+                            EMIT("LUKS Secure Boot binding", CHECK_WARN, detail);
+                        } else {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; Secure Boot state measured", pcr_str);
+                            EMIT("LUKS Secure Boot binding", CHECK_OK, detail);
+                        }
+
+                        if (!has4 && !has9) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s only; bootloader and initramfs unprotected", pcr_str);
+                            EMIT("LUKS boot chain binding", CHECK_WARN, detail);
+                        } else if (!has9) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; initramfs unprotected", pcr_str);
+                            EMIT("LUKS boot chain binding", CHECK_WARN, detail);
+                        } else if (luks_token_noparsed > 0) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; %zu %s PCR binding unreadable",
+                                pcr_str, luks_token_noparsed,
+                                bythos_pl(luks_token_noparsed, "device", "devices"));
+                            EMIT("LUKS boot chain binding", CHECK_WARN, detail);
+                        } else if (has0) {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; firmware and full boot chain measured", pcr_str);
+                            EMIT("LUKS boot chain binding", CHECK_OK, detail);
+                        } else {
+                            snprintf(detail, sizeof(detail),
+                                "PCRs: %s; boot chain measured", pcr_str);
+                            EMIT("LUKS boot chain binding", CHECK_OK, detail);
+                        }
                     }
                 }
             }

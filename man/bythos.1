@@ -222,7 +222,8 @@ mount, validated by \fI/boot/EFI\fR
 .PP
 Each LUKS-formatted block device discovered via \fBlsblk\fR(8) is
 queried at \fI/dev/<name>\fR with \fBcryptsetup\fR(8) \fBluksDump\fR
-for TPM2 token information.
+for header version, dm-integrity configuration, and systemd-tpm2
+token PCR mask.
 .RE
 .SH DEPENDENCIES
 None of the tools below are required. Each is consulted only when
@@ -252,7 +253,8 @@ curated HSI signal read
 \- PCR 0 and PCR 7 measurement state
 .IP \(bu 2
 .BR cryptsetup (8)
-\- LUKS token enumeration and TPM2 PCR mask read
+\- LUKS header version, dm-integrity configuration, token enumeration,
+and TPM2 PCR mask read
 .IP \(bu 2
 .BR lsblk (8)
 \- LUKS volume discovery

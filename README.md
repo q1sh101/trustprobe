@@ -30,7 +30,7 @@ bythos does not harden. It reads, classifies, prints, exits.
 | Boot chain        | shim signature, SBAT revocations, BootOrder, EFI one-shot boot, ... |
 | ESP               | ownership, filesystem type, fallback boot binary, capsules          |
 | TPM               | TPM 2.0, DA lockout, PCR 0/7, event-log CRTM signal                 |
-| LUKS              | encrypted volumes, systemd TPM2 token, PCR mask strength            |
+| LUKS              | encrypted volumes, LUKS2 version, dm-integrity, TPM2 binding tiers  |
 | Platform firmware | BIOS_CNTL, Intel ME, Intel DCI, AMD PSP, chipsec availability       |
 | Platform DMA      | IOMMU groups, IOMMU DMA posture, Thunderbolt DMA protection         |
 | CPU               | microcode, memory encryption, CPU vulnerability scan                |
