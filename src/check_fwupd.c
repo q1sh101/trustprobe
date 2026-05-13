@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "checks.h"
@@ -7,6 +8,18 @@
 #include "firmware_parsers.h"
 #include "runtime.h"
 #include "silicon_parsers.h"
+
+static void hsi_format_warn(const bythos_hsi_attribute_t *attr,
+                            char *out, size_t size) {
+    const char *suffix = "";
+    switch (attr->action) {
+    case BYTHOS_HSI_ACTION_OEM:      suffix = "; OEM-controlled";       break;
+    case BYTHOS_HSI_ACTION_FIRMWARE: suffix = "; configurable in BIOS"; break;
+    case BYTHOS_HSI_ACTION_OS:       suffix = "; configurable in OS";   break;
+    default: break;
+    }
+    snprintf(out, size, "%s%s", attr->result, suffix);
+}
 
 size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     size_t used = 0;
@@ -79,10 +92,9 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     }
 
     {
-        int devices = -1;
         if (!has_fwupdmgr) {
             EMIT_SKIP_TOOL_INSTALL("firmware inventory", "fwupd");
-        } else if ((devices = bythos_run_argv_quiet(fwupd_devices_argv)) == 0) {
+        } else if (bythos_run_argv_quiet(fwupd_devices_argv) == 0) {
             EMIT("firmware inventory", CHECK_OK, "device list available");
         } else {
             EMIT_SKIP_EXEC("firmware inventory", "fwupdmgr");
@@ -156,18 +168,21 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
         return used;
     }
 
-#define EMIT_HSI(name_, id_, positive_, ok_msg_, warn_msg_) \
+#define EMIT_HSI(name_, id_, positive_, ok_msg_) \
     do { \
         if (used < max_results) { \
-            char _v[64] = {0}; \
-            if (!bythos_hsi_find_result(hsi_json, (id_), _v, sizeof(_v))) { \
+            bythos_hsi_attribute_t _a; \
+            if (!bythos_hsi_find_attribute(hsi_json, (id_), &_a)) { \
                 results[used++] = make_skip((name_), SKIP_FEATURE_ABSENT, "not reported"); \
-            } else if (strcmp(_v, "not-supported") == 0) { \
+            } else if (strcmp(_a.result, "not-supported") == 0) { \
                 results[used++] = make_skip((name_), SKIP_FEATURE_ABSENT, "not supported"); \
-            } else if (strcmp(_v, (positive_)) == 0) { \
+            } else if ((_a.success[0] != '\0' && strcmp(_a.result, _a.success) == 0) || \
+                       (_a.success[0] == '\0' && strcmp(_a.result, (positive_)) == 0)) { \
                 results[used++] = make_result((name_), CHECK_OK, (ok_msg_)); \
             } else { \
-                results[used++] = make_result((name_), CHECK_WARN, (warn_msg_)); \
+                char _detail[BYTHOS_DETAIL_MAX]; \
+                hsi_format_warn(&_a, _detail, sizeof(_detail)); \
+                results[used++] = make_result((name_), CHECK_WARN, _detail); \
             } \
         } \
     } while (0)
@@ -175,96 +190,98 @@ size_t bythos_check_fwupd(check_result_t *results, size_t max_results) {
     /* universal */
     EMIT_HSI("HSI: platform fused",
              "org.fwupd.hsi.PlatformFused",           "locked",
-             "security fuses set",                    "security fuses not set");
+             "security fuses set");
     EMIT_HSI("HSI: debug locked",
              "org.fwupd.hsi.PlatformDebugLocked",     "locked",
-             "locked",                                "not locked");
+             "locked");
     EMIT_HSI("HSI: Secure Boot",
              "org.fwupd.hsi.Uefi.SecureBoot",         "enabled",
-             "enabled",                               "not enabled");
+             "enabled");
     EMIT_HSI("HSI: UEFI PK",
              "org.fwupd.hsi.Uefi.Pk",                 "valid",
-             "enrolled",                              "not enrolled");
+             "enrolled");
     EMIT_HSI("HSI: UEFI db",
              "org.fwupd.hsi.Uefi.Db",                 "valid",
-             "valid",                                 "not valid");
+             "valid");
     EMIT_HSI("HSI: DBX currency",
              "org.fwupd.hsi.UefiDbxUpdates",          "valid",
-             "revocation list current",               "revocation list outdated");
+             "revocation list current");
     EMIT_HSI("HSI: UEFI boot variables",
              "org.fwupd.hsi.Uefi.BootserviceVars",    "locked",
-             "locked",                                "not locked");
+             "locked");
     EMIT_HSI("HSI: capsule updates",
              "org.fwupd.hsi.Bios.CapsuleUpdates",     "enabled",
-             "authentication enabled",               "authentication not enabled");
+             "authentication enabled");
     EMIT_HSI("HSI: TPM 2.0",
              "org.fwupd.hsi.Tpm.Version20",           "found",
-             "present",                               "not found");
+             "present");
     EMIT_HSI("HSI: TPM empty PCR",
-             "org.fwupd.hsi.Tpm.EmptyPcr",           "valid",
-             "no unexpected empty PCRs",              "unexpected empty PCR found");
+             "org.fwupd.hsi.Tpm.EmptyPcr",            "valid",
+             "no unexpected empty PCRs");
     EMIT_HSI("HSI: TPM PCR0 reconstruction",
-             "org.fwupd.hsi.Tpm.ReconstructionPcr0", "valid",
-             "valid",                                 "failed");
+             "org.fwupd.hsi.Tpm.ReconstructionPcr0",  "valid",
+             "valid");
     EMIT_HSI("HSI: IOMMU",
              "org.fwupd.hsi.Iommu",                   "enabled",
-             "enabled",                               "not enabled");
+             "enabled");
     EMIT_HSI("HSI: pre-boot DMA protection",
              "org.fwupd.hsi.PrebootDma",              "enabled",
-             "active",                                "not active");
+             "active");
     EMIT_HSI("HSI: encrypted RAM",
              "org.fwupd.hsi.EncryptedRam",            "enabled",
-             "memory encryption active",              "memory encryption not active");
+             "memory encryption active");
 
     /* AMD-only */
     if (vendor == BYTHOS_CPU_VENDOR_AMD) {
         EMIT_HSI("HSI: platform secure boot",
                  "org.fwupd.hsi.Amd.PlatformSecureBoot",  "enabled",
-                 "enabled",                               "disabled");
+                 "fused at factory");
         EMIT_HSI("HSI: SMM locked",
-                 "org.fwupd.hsi.Amd.SmmLocked",          "locked",
-                 "locked",                                "not locked");
+                 "org.fwupd.hsi.Amd.SmmLocked",           "locked",
+                 "locked");
         EMIT_HSI("HSI: SPI replay protection",
                  "org.fwupd.hsi.Amd.SpiReplayProtection", "enabled",
-                 "enabled",                               "not enabled");
+                 "enabled");
         EMIT_HSI("HSI: firmware rollback protection",
                  "org.fwupd.hsi.Amd.RollbackProtection",  "enabled",
-                 "enabled",                               "not enabled");
+                 "enabled");
         EMIT_HSI("HSI: SPI write protection",
                  "org.fwupd.hsi.Amd.SpiWriteProtection",  "enabled",
-                 "enabled",                               "not enabled");
+                 "enabled");
     }
 
     /* Intel-only */
     if (vendor == BYTHOS_CPU_VENDOR_INTEL) {
         EMIT_HSI("HSI: BIOS write protection",
                  "org.fwupd.hsi.BiosWriteProtection",     "enabled",
-                 "enabled",                               "not enabled");
+                 "enabled");
         EMIT_HSI("HSI: ME manufacturing mode",
                  "org.fwupd.hsi.IntelMeMfgMode",          "locked",
-                 "not in manufacturing mode",             "in manufacturing mode");
+                 "not in manufacturing mode");
         EMIT_HSI("HSI: Boot Guard ACM",
-                 "org.fwupd.hsi.IntelBootguard.Acm",     "valid",
-                 "valid",                                 "not valid");
+                 "org.fwupd.hsi.IntelBootguard.Acm",      "valid",
+                 "valid");
         EMIT_HSI("HSI: Boot Guard policy",
-                 "org.fwupd.hsi.IntelBootguard.Policy",  "valid",
-                 "valid",                                 "not valid");
+                 "org.fwupd.hsi.IntelBootguard.Policy",   "valid",
+                 "valid");
 
         {
-            char en_val[64]  = {0};
-            char ver_val[64] = {0};
-            bool has_en  = bythos_hsi_find_result(hsi_json,
-                               "org.fwupd.hsi.IntelBootguard.Enabled", en_val, sizeof(en_val));
-            bool has_ver = bythos_hsi_find_result(hsi_json,
-                               "org.fwupd.hsi.IntelBootguard.Verified", ver_val, sizeof(ver_val));
+            bythos_hsi_attribute_t en_attr;
+            bythos_hsi_attribute_t ver_attr;
+            bool has_en  = bythos_hsi_find_attribute(hsi_json,
+                               "org.fwupd.hsi.IntelBootguard.Enabled", &en_attr);
+            bool has_ver = bythos_hsi_find_attribute(hsi_json,
+                               "org.fwupd.hsi.IntelBootguard.Verified", &ver_attr);
 
             if (!has_en) {
                 EMIT_SKIP("HSI: Boot Guard", SKIP_FEATURE_ABSENT, "not reported");
-            } else if (strcmp(en_val, "not-supported") == 0) {
+            } else if (strcmp(en_attr.result, "not-supported") == 0) {
                 EMIT_SKIP("HSI: Boot Guard", SKIP_FEATURE_ABSENT, "not supported");
-            } else if (strcmp(en_val, "enabled") != 0) {
-                EMIT("HSI: Boot Guard", CHECK_WARN, "not enabled");
-            } else if (has_ver && strcmp(ver_val, "enabled") != 0) {
+            } else if (strcmp(en_attr.result, "enabled") != 0) {
+                char detail[BYTHOS_DETAIL_MAX];
+                hsi_format_warn(&en_attr, detail, sizeof(detail));
+                EMIT("HSI: Boot Guard", CHECK_WARN, detail);
+            } else if (has_ver && strcmp(ver_attr.result, "enabled") != 0) {
                 EMIT("HSI: Boot Guard", CHECK_WARN, "measurement-only");
             } else {
                 EMIT("HSI: Boot Guard", CHECK_OK, "enabled and verified");

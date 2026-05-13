@@ -297,6 +297,53 @@ int main(void) {
     }
 
     {
+        static const char *const attr_sample =
+            "{\"SecurityAttributes\":[\n"
+            "  {\"AppstreamId\":\"org.fwupd.hsi.Amd.PlatformSecureBoot\","
+            "   \"HsiResult\":\"not-enabled\","
+            "   \"HsiResultSuccess\":\"enabled\","
+            "   \"Flags\":[\"action-contact-oem\"]},\n"
+            "  {\"AppstreamId\":\"org.fwupd.hsi.Uefi.SecureBoot\","
+            "   \"HsiResult\":\"enabled\","
+            "   \"HsiResultSuccess\":\"enabled\","
+            "   \"Flags\":[\"success\"]},\n"
+            "  {\"AppstreamId\":\"org.fwupd.hsi.Uefi.Db\","
+            "   \"HsiResult\":\"not-valid\","
+            "   \"HsiResultSuccess\":\"valid\","
+            "   \"Flags\":[\"runtime-issue\",\"action-config-fw\"]},\n"
+            "  {\"AppstreamId\":\"org.fwupd.hsi.Kernel.Swap\","
+            "   \"HsiResult\":\"not-encrypted\","
+            "   \"HsiResultSuccess\":\"encrypted\","
+            "   \"Flags\":[\"action-config-os\"]}\n"
+            "]}\n";
+
+        bythos_hsi_attribute_t attr;
+
+        assert_true("hsi_attr_oem_found",
+            bythos_hsi_find_attribute(attr_sample, "org.fwupd.hsi.Amd.PlatformSecureBoot", &attr));
+        assert_true("hsi_attr_oem_result",   strcmp(attr.result,  "not-enabled") == 0);
+        assert_true("hsi_attr_oem_success",  strcmp(attr.success, "enabled")     == 0);
+        assert_eq_int("hsi_attr_oem_action", (int)attr.action, (int)BYTHOS_HSI_ACTION_OEM);
+
+        assert_true("hsi_attr_success_found",
+            bythos_hsi_find_attribute(attr_sample, "org.fwupd.hsi.Uefi.SecureBoot", &attr));
+        assert_eq_int("hsi_attr_success_action", (int)attr.action, (int)BYTHOS_HSI_ACTION_NONE);
+
+        assert_true("hsi_attr_fw_found",
+            bythos_hsi_find_attribute(attr_sample, "org.fwupd.hsi.Uefi.Db", &attr));
+        assert_eq_int("hsi_attr_fw_action", (int)attr.action, (int)BYTHOS_HSI_ACTION_FIRMWARE);
+
+        assert_true("hsi_attr_os_found",
+            bythos_hsi_find_attribute(attr_sample, "org.fwupd.hsi.Kernel.Swap", &attr));
+        assert_eq_int("hsi_attr_os_action", (int)attr.action, (int)BYTHOS_HSI_ACTION_OS);
+
+        assert_false("hsi_attr_absent",
+            bythos_hsi_find_attribute(attr_sample, "org.fwupd.hsi.Missing", &attr));
+        assert_false("hsi_attr_null_json",
+            bythos_hsi_find_attribute(NULL, "org.fwupd.hsi.Uefi.Db", &attr));
+    }
+
+    {
         /* SbatLevel efivar: 4-byte attr header + "sbat,1,2021030218\nshim,2\n" */
         unsigned char sbat_buf[32] = {0x07, 0x00, 0x00, 0x00,
             's','b','a','t',',','1',',','2','0','2','1','0','3','0','2','1','8','\n',

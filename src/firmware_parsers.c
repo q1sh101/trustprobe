@@ -15,6 +15,7 @@
 #define BYTHOS_PE_COFF_HEADER_BYTES 20
 #define BYTHOS_PE_SECTION_HEADER_BYTES 40
 #define BYTHOS_PE_SECTION_NAME_BYTES 8
+#define BYTHOS_HSI_FLAGS_BUFFER_BYTES 256
 
 static const char *const SECURE_BOOT_ENABLED_TEXT = "enabled";
 static const char *const SECURE_BOOT_DISABLED_TEXT = "disabled";
@@ -280,71 +281,88 @@ bythos_fwupd_updates_status_t bythos_parse_fwupd_updates(const char *text, int e
     return BYTHOS_FWUPD_UPDATES_UNKNOWN;
 }
 
-bool bythos_hsi_find_result(const char *json, const char *appstream_id,
-                                char *result_buf, size_t result_size) {
+static bool extract_quoted_value(const char *key_pos, size_t key_len,
+                                 const char *bound,
+                                 char *out, size_t out_size) {
+    const char *colon = strchr(key_pos + key_len, ':');
+    if (colon == NULL || colon >= bound) return false;
+    const char *q1 = strchr(colon + 1, '"');
+    if (q1 == NULL || q1 >= bound) return false;
+    q1++;
+    const char *q2 = strchr(q1, '"');
+    if (q2 == NULL || q2 >= bound) return false;
+    size_t vlen = (size_t)(q2 - q1);
+    if (vlen >= out_size) vlen = out_size - 1;
+    memcpy(out, q1, vlen);
+    out[vlen] = '\0';
+    return true;
+}
+
+bool bythos_hsi_find_attribute(const char *json, const char *appstream_id,
+                                   bythos_hsi_attribute_t *out) {
     static const char APPSTREAM_ID_KEY[] = "\"AppstreamId\"";
     static const char HSI_RESULT_KEY[]   = "\"HsiResult\"";
+    static const char HSI_SUCCESS_KEY[]  = "\"HsiResultSuccess\"";
+    static const char FLAGS_KEY[]        = "\"Flags\"";
 
-    if (json == NULL || appstream_id == NULL || result_buf == NULL || result_size == 0) {
+    if (json == NULL || appstream_id == NULL || out == NULL) {
         return false;
     }
+    *out = (bythos_hsi_attribute_t){0};
 
     const char *cursor = json;
     while (*cursor != '\0') {
         const char *id_key = strstr(cursor, APPSTREAM_ID_KEY);
-        if (id_key == NULL) {
-            break;
-        }
+        if (id_key == NULL) break;
 
         const char *colon = strchr(id_key + sizeof(APPSTREAM_ID_KEY) - 1, ':');
-        if (colon == NULL) {
-            break;
-        }
+        if (colon == NULL) break;
         const char *q1 = strchr(colon + 1, '"');
-        if (q1 == NULL) {
-            break;
-        }
+        if (q1 == NULL) break;
         q1++;
         const char *q2 = strchr(q1, '"');
-        if (q2 == NULL) {
-            break;
-        }
+        if (q2 == NULL) break;
 
         size_t id_len     = (size_t)(q2 - q1);
         size_t target_len = strlen(appstream_id);
 
         if (id_len == target_len && memcmp(q1, appstream_id, id_len) == 0) {
-            const char *hsi_key = strstr(q2 + 1, HSI_RESULT_KEY);
             const char *next_id = strstr(q2 + 1, APPSTREAM_ID_KEY);
+            const char *bound = next_id != NULL ? next_id : q2 + strlen(q2);
 
-            if (hsi_key == NULL) {
-                break;
-            }
-            /* stay within the matched object */
-            if (next_id != NULL && next_id < hsi_key) {
-                break;
-            }
-
-            const char *hsi_colon = strchr(hsi_key + sizeof(HSI_RESULT_KEY) - 1, ':');
-            if (hsi_colon == NULL) {
-                break;
-            }
-            const char *v1 = strchr(hsi_colon + 1, '"');
-            if (v1 == NULL) {
-                break;
-            }
-            v1++;
-            const char *v2 = strchr(v1, '"');
-            if (v2 == NULL) {
-                break;
+            const char *hsi_key = strstr(q2 + 1, HSI_RESULT_KEY);
+            if (hsi_key == NULL || hsi_key >= bound) return false;
+            if (!extract_quoted_value(hsi_key, sizeof(HSI_RESULT_KEY) - 1,
+                                       bound, out->result, sizeof(out->result))) {
+                return false;
             }
 
-            size_t vlen = (size_t)(v2 - v1);
-            if (vlen >= result_size) {
-                vlen = result_size - 1;
+            const char *succ_key = strstr(q2 + 1, HSI_SUCCESS_KEY);
+            if (succ_key != NULL && succ_key < bound) {
+                extract_quoted_value(succ_key, sizeof(HSI_SUCCESS_KEY) - 1,
+                                     bound, out->success, sizeof(out->success));
             }
-            memcpy(result_buf, v1, vlen);
-            result_buf[vlen] = '\0';
+
+            const char *flags_key = strstr(q2 + 1, FLAGS_KEY);
+            if (flags_key != NULL && flags_key < bound) {
+                const char *open  = strchr(flags_key + sizeof(FLAGS_KEY) - 1, '[');
+                const char *close = open != NULL ? strchr(open, ']') : NULL;
+                if (open != NULL && close != NULL && close < bound) {
+                    char arr[BYTHOS_HSI_FLAGS_BUFFER_BYTES];
+                    size_t alen = (size_t)(close - open);
+                    if (alen >= sizeof(arr)) alen = sizeof(arr) - 1;
+                    memcpy(arr, open, alen);
+                    arr[alen] = '\0';
+                    if (strstr(arr, "action-contact-oem") != NULL) {
+                        out->action = BYTHOS_HSI_ACTION_OEM;
+                    } else if (strstr(arr, "action-config-fw") != NULL) {
+                        out->action = BYTHOS_HSI_ACTION_FIRMWARE;
+                    } else if (strstr(arr, "action-config-os") != NULL) {
+                        out->action = BYTHOS_HSI_ACTION_OS;
+                    }
+                }
+            }
+
             return true;
         }
 
@@ -352,6 +370,19 @@ bool bythos_hsi_find_result(const char *json, const char *appstream_id,
     }
 
     return false;
+}
+
+bool bythos_hsi_find_result(const char *json, const char *appstream_id,
+                                char *result_buf, size_t result_size) {
+    if (result_buf == NULL || result_size == 0) {
+        return false;
+    }
+    bythos_hsi_attribute_t attr;
+    if (!bythos_hsi_find_attribute(json, appstream_id, &attr)) {
+        return false;
+    }
+    snprintf(result_buf, result_size, "%s", attr.result);
+    return true;
 }
 
 bool bythos_parse_sbctl_status(const char *text, bythos_sbctl_status_t *status) {

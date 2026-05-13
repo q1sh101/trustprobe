@@ -40,6 +40,22 @@ bool bythos_parse_sbctl_status(const char *text, bythos_sbctl_status_t *status);
 bool bythos_hsi_find_result(const char *json, const char *appstream_id,
                                 char *result_buf, size_t result_size);
 
+typedef enum {
+    BYTHOS_HSI_ACTION_NONE = 0,
+    BYTHOS_HSI_ACTION_OEM,
+    BYTHOS_HSI_ACTION_FIRMWARE,
+    BYTHOS_HSI_ACTION_OS,
+} bythos_hsi_action_t;
+
+typedef struct {
+    char result[64];
+    char success[64];
+    bythos_hsi_action_t action;
+} bythos_hsi_attribute_t;
+
+bool bythos_hsi_find_attribute(const char *json, const char *appstream_id,
+                                   bythos_hsi_attribute_t *out);
+
 /* efivar buf has a 4-byte UEFI attribute header; extracts first line of payload */
 bool bythos_parse_sbat_level(const unsigned char *buf, size_t len,
                                  char *out, size_t out_size);
